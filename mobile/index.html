@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Mobile App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .screen {
+            display: none;
+            background: white;
+            border-radius: 20px;
+            padding: 30px 20px;
+            margin: 20px 0;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            color: #4a5568;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        h2 {
+            color: #4a5568;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .qr-scanner {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin: 20px auto;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        #camera {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+        }
+
+        .qr-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            border: 3px solid #00ff00;
+            border-radius: 10px;
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #00ff00;
+        }
+
+        .corner.top-left {
+            top: -3px;
+            left: -3px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .corner.top-right {
+            top: -3px;
+            right: -3px;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .corner.bottom-left {
+            bottom: -3px;
+            left: -3px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .corner.bottom-right {
+            bottom: -3px;
+            right: -3px;
+            border-left: none;
+            border-top: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .player-list {
+            margin: 20px 0;
+        }
+
+        .player-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .player-item:hover {
+            border-color: #667eea;
+            background: #e3f2fd;
+        }
+
+        .player-checkbox {
+            margin-right: 15px;
+            transform: scale(1.5);
+            cursor: pointer;
+        }
+
+        .player-info {
+            flex-grow: 1;
+        }
+
+        .player-name {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 16px;
+        }
+
+        .player-number {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .score-input-container {
+            margin: 15px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .score-input-container.valid {
+            border-color: #48bb78;
+            background: #f0fff4;
+        }
+
+        .score-input {
+            width: 80px;
+            height: 60px;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            border: 2px solid #cbd5e0;
+            border-radius: 10px;
+            margin: 10px auto;
+            display: block;
+            transition: all 0.3s ease;
+        }
+
+        .score-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .score-input.valid {
+            border-color: #48bb78;
+            background: #f0fff4;
+        }
+
+        .info-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 15px 0;
+            border-left: 5px solid #667eea;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .info-value {
+            color: #718096;
+            font-weight: 500;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 1px solid #feb2b2;
+        }
+
+        .success {
+            background: #c6f6d5;
+            color: #2d7d32;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 1px solid #9ae6b4;
+        }
+
+        .hole-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .hole-number {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .hole-details {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .final-score-card {
+            background: #f8f9fa;
+            border: 2px solid #e2e8f0;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .score-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .score-cell {
+            background: white;
+            border: 1px solid #cbd5e0;
+            border-radius: 8px;
+            padding: 10px 5px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .score-header {
+            background: #667eea;
+            color: white;
+            font-size: 12px;
+        }
+
+        .congratulations {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .congratulations h2 {
+            color: #48bb78;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+
+        .congratulations p {
+            font-size: 18px;
+            line-height: 1.6;
+            color: #4a5568;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+
+            .screen {
+                padding: 20px 15px;
+                margin: 10px 0;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            .hole-number {
+                font-size: 36px;
+            }
+
+            .score-input {
+                width: 60px;
+                height: 50px;
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Screen 1: Team QR Code Scanner -->
+        <div id="screen-team-scan" class="screen active">
+            <h1>Scan Team Card</h1>
+            <p style="text-align: center; margin-bottom: 20px; color: #718096;">
+                Position the team QR code in the frame below
+            </p>
+            <div class="qr-scanner">
+                <video id="camera" autoplay playsinline></video>
+                <div class="qr-overlay">
+                    <div class="corner top-left"></div>
+                    <div class="corner top-right"></div>
+                    <div class="corner bottom-left"></div>
+                    <div class="corner bottom-right"></div>
+                </div>
+            </div>
+            <div class="loading" id="team-loading">
+                <div class="spinner"></div>
+                <p>Processing team card...</p>
+            </div>
+            <div id="team-error" class="error" style="display: none;"></div>
+        </div>
+
+        <!-- Screen 2: Player Confirmation -->
+        <div id="screen-player-confirm" class="screen">
+            <h1>Confirm Players</h1>
+            <p style="text-align: center; margin-bottom: 20px; color: #718096;">
+                Check the players who will be participating
+            </p>
+            <div id="team-info" class="info-card">
+                <div class="info-item">
+                    <span class="info-label">Team:</span>
+                    <span class="info-value" id="team-name-display"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Team Number:</span>
+                    <span class="info-value" id="team-number-display"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Tournament:</span>
+                    <span class="info-value" id="tournament-name-display"></span>
+                </div>
+            </div>
+            <div id="player-list" class="player-list"></div>
+            <button id="confirm-players-btn" class="btn" disabled>Confirm Players</button>
+            <div id="player-error" class="error" style="display: none;"></div>
+        </div>
+
+        <!-- Screen 3: Hole QR Code Scanner -->
+        <div id="screen-hole-scan" class="screen">
+            <h1>Scan Starting Hole</h1>
+            <p style="text-align: center; margin-bottom: 20px; color: #718096;">
+                Position the hole QR code in the frame below
+            </p>
+            <div class="qr-scanner">
+                <video id="camera-hole" autoplay playsinline></video>
+                <div class="qr-overlay">
+                    <div class="corner top-left"></div>
+                    <div class="corner top-right"></div>
+                    <div class="corner bottom-left"></div>
+                    <div class="corner bottom-right"></div>
+                </div>
+            </div>
+            <div class="loading" id="hole-loading">
+                <div class="spinner"></div>
+                <p>Processing hole card...</p>
+            </div>
+            <div id="hole-error" class="error" style="display: none;"></div>
+        </div>
+
+        <!-- Screen 4: Start Round -->
+        <div id="screen-start-round" class="screen">
+            <h1>Ready to Start</h1>
+            <div class="info-card">
+                <div class="info-item">
+                    <span class="info-label">Tournament:</span>
+                    <span class="info-value" id="start-tournament-name"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Course:</span>
+                    <span class="info-value" id="start-course-name"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Starting Hole:</span>
+                    <span class="info-value" id="start-hole-info"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Players:</span>
+                    <span class="info-value" id="start-player-count"></span>
+                </div>
+            </div>
+            <button id="start-round-btn" class="btn">Start Round</button>
+            <div class="loading" id="start-loading">
+                <div class="spinner"></div>
+                <p>Activating team and players...</p>
+            </div>
+            <div id="start-error" class="error" style="display: none;"></div>
+        </div>
+
+        <!-- Screen 5: Score Input -->
+        <div id="screen-score-input" class="screen">
+            <div class="hole-info">
+                <div class="hole-number" id="current-hole-number"></div>
+                <div class="hole-details">
+                    <div id="current-hole-name"></div>
+                    <div>Par <span id="current-hole-par"></span></div>
+                    <div id="current-course-name"></div>
+                </div>
+            </div>
+
+            <div id="score-inputs-container"></div>
+
+            <button id="record-score-btn" class="btn" disabled>Record Scores</button>
+            <div class="loading" id="score-loading">
+                <div class="spinner"></div>
+                <p>Recording scores...</p>
+            </div>
+            <div id="score-error" class="error" style="display: none;"></div>
+        </div>
+
+        <!-- Screen 6: Player Score Confirmation -->
+        <div id="screen-player-score-confirm" class="screen">
+            <h1>Confirm Your Scores</h1>
+            <div class="final-score-card">
+                <h2 id="confirm-player-name"></h2>
+                <div class="score-grid" id="player-score-grid"></div>
+                <div class="info-item">
+                    <span class="info-label">Total Score:</span>
+                    <span class="info-value" id="player-total-score"></span>
+                </div>
+            </div>
+            <button id="confirm-score-btn" class="btn">Confirm Score</button>
+            <div class="loading" id="confirm-loading">
+                <div class="spinner"></div>
+                <p>Confirming player scores...</p>
+            </div>
+            <div id="confirm-error" class="error" style="display: none;"></div>
+        </div>
+
+        <!-- Screen 7: Congratulations -->
+        <div id="screen-congratulations" class="screen">
+            <div class="congratulations">
+                <h2>🎉 Congratulations! 🎉</h2>
+                <p>Your team has successfully completed the round!</p>
+                <p>Please join everyone else for food, drinks, and the presentation of awards.</p>
+                <p style="margin-top: 30px; font-weight: 600;">Thank you for participating!</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script>
+        class TournamentApp {
+            constructor() {
+                this.currentScreen = 'screen-team-scan';
+                this.teamData = null;
+                this.confirmedPlayers = [];
+                this.holeData = null;
+                this.courseHoles = [];
+                this.currentHole = 1;
+                this.startingHole = 1;
+                this.courseName = '';
+                this.tournamentName = '';
+                this.teamNumber = 0;
+                this.holesPlayed = 0;
+                this.playerScores = {};
+                this.currentPlayerConfirmIndex = 0;
+
+                this.codeReader = new ZXing.BrowserQRCodeReader();
+                this.scannerActive = false;
+
+                this.initializeEventListeners();
+                this.startTeamScanner();
+            }
+
+            initializeEventListeners() {
+                document.getElementById('confirm-players-btn').addEventListener('click', () => {
+                    this.confirmPlayers();
+                });
+
+                document.getElementById('start-round-btn').addEventListener('click', () => {
+                    this.startRound();
+                });
+
+                document.getElementById('record-score-btn').addEventListener('click', () => {
+                    this.recordScores();
+                });
+
+                document.getElementById('confirm-score-btn').addEventListener('click', () => {
+                    this.confirmPlayerScore();
+                });
+            }
+
+            showScreen(screenId) {
+                document.querySelectorAll('.screen').forEach(screen => {
+                    screen.classList.remove('active');
+                });
+                document.getElementById(screenId).classList.add('active');
+                this.currentScreen = screenId;
+            }
+
+            showError(elementId, message) {
+                const errorElement = document.getElementById(elementId);
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+                setTimeout(() => {
+                    errorElement.style.display = 'none';
+                }, 5000);
+            }
+
+            showLoading(elementId, show = true) {
+                document.getElementById(elementId).style.display = show ? 'block' : 'none';
+            }
+
+            async startTeamScanner() {
+                try {
+                    const videoElement = document.getElementById('camera');
+                    this.scannerActive = true;
+
+                    this.codeReader.decodeFromVideoDevice(undefined, videoElement, (result, err) => {
+                        if (result && this.scannerActive && this.currentScreen === 'screen-team-scan') {
+                            this.handleTeamQRCode(result.getText());
+                        }
+                    });
+                } catch (error) {
+                    this.showError('team-error', 'Camera access denied. Please allow camera access.');
+                }
+            }
+
+            async startHoleScanner() {
+                try {
+                    const videoElement = document.getElementById('camera-hole');
+                    this.scannerActive = true;
+
+                    this.codeReader.decodeFromVideoDevice(undefined, videoElement, (result, err) => {
+                        if (result && this.scannerActive && this.currentScreen === 'screen-hole-scan') {
+                            this.handleHoleQRCode(result.getText());
+                        }
+                    });
+                } catch (error) {
+                    this.showError('hole-error', 'Camera access denied. Please allow camera access.');
+                }
+            }
+
+            handleTeamQRCode(qrData) {
+                this.scannerActive = false;
+                this.showLoading('team-loading', true);
+
+                try {
+                    const data = JSON.parse(qrData);
+
+                    if (data.type !== 'team_card') {
+                        throw new Error('Invalid team card');
+                    }
+
+                    this.teamData = data;
+                    this.teamNumber = data.team_number;
+
+                    if (data.tournaments && data.tournaments.length > 0) {
+                        this.tournamentName = data.tournaments[0].tournament_name;
+                    }
+
+                    setTimeout(() => {
+                        this.showLoading('team-loading', false);
+                        this.displayPlayerConfirmation();
+                    }, 1000);
+
+                } catch (error) {
+                    this.showLoading('team-loading', false);
+                    this.showError('team-error', 'Invalid team QR code. Please try again.');
+                    setTimeout(() => this.startTeamScanner(), 2000);
+                }
+            }
+
+            displayPlayerConfirmation() {
+                document.getElementById('team-name-display').textContent = this.teamData.team_name;
+                document.getElementById('team-number-display').textContent = this.teamData.team_number;
+                document.getElementById('tournament-name-display').textContent = this.tournamentName;
+
+                const playerList = document.getElementById('player-list');
+                playerList.innerHTML = '';
+
+                this.teamData.players.forEach((player, index) => {
+                    const playerDiv = document.createElement('div');
+                    playerDiv.className = 'player-item';
+                    playerDiv.innerHTML = `
+                        <input type="checkbox" class="player-checkbox" id="player-${index}" checked>
+                        <div class="player-info">
+                            <div class="player-name">${player.name}</div>
+                            <div class="player-number">Player #${player.number}</div>
+                        </div>
+                    `;
+                    playerList.appendChild(playerDiv);
+
+                    const checkbox = document.getElementById(`player-${index}`);
+                    checkbox.addEventListener('change', () => {
+                        this.updateConfirmButton();
+                    });
+                });
+
+                this.updateConfirmButton();
+                this.showScreen('screen-player-confirm');
+            }
+
+            updateConfirmButton() {
+                const checkboxes = document.querySelectorAll('.player-checkbox');
+                const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+                document.getElementById('confirm-players-btn').disabled = checkedCount === 0;
+            }
+
+            confirmPlayers() {
+                this.confirmedPlayers = [];
+                const checkboxes = document.querySelectorAll('.player-checkbox');
+
+                checkboxes.forEach((checkbox, index) => {
+                    if (checkbox.checked) {
+                        this.confirmedPlayers.push(this.teamData.players[index]);
+                    }
+                });
+
+                // Initialize player scores tracking
+                this.playerScores = {};
+                this.confirmedPlayers.forEach(player => {
+                    this.playerScores[player.number] = [];
+                });
+
+                this.showScreen('screen-hole-scan');
+                setTimeout(() => this.startHoleScanner(), 500);
+            }
+
+            async handleHoleQRCode(qrData) {
+                this.scannerActive = false;
+                this.showLoading('hole-loading', true);
+
+                try {
+                    const data = JSON.parse(qrData);
+
+                    if (data.type !== 'hole_card') {
+                        throw new Error('Invalid hole card');
+                    }
+
+                    this.holeData = data;
+                    this.courseName = data.course_name;
+                    this.startingHole = data.hole_number;
+                    this.currentHole = this.startingHole;
+
+                    // Fetch all hole information for the course
+                    await this.fetchCourseHoles();
+
+                    setTimeout(() => {
+                        this.showLoading('hole-loading', false);
+                        this.displayStartRound();
+                    }, 1000);
+
+                } catch (error) {
+                    this.showLoading('hole-loading', false);
+                    this.showError('hole-error', error.message || 'Invalid hole QR code. Please try again.');
+                    setTimeout(() => this.startHoleScanner(), 2000);
+                }
+            }
+
+            displayStartRound() {
+                document.getElementById('start-tournament-name').textContent = this.tournamentName;
+                document.getElementById('start-course-name').textContent = this.courseName;
+                document.getElementById('start-hole-info').textContent = 
+                    `${this.holeData.hole_name} (Hole ${this.startingHole})`;
+                document.getElementById('start-player-count').textContent = this.confirmedPlayers.length;
+
+                this.showScreen('screen-start-round');
+            }
+
+            async startRound() {
+                this.showLoading('start-loading', true);
+
+                try {
+                    // Step 5: Activate team round
+                    const teamResponse = await fetch('/tournament/activate-team-round', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            tournament_name: this.tournamentName,
+                            team_number: this.teamNumber
+                        })
+                    });
+
+                    if (!teamResponse.ok) {
+                        throw new Error('Failed to activate team round');
+                    }
+
+                    // Step 6: Activate player rounds
+                    for (const player of this.confirmedPlayers) {
+                        const playerResponse = await fetch('/tournament/activate-player-round', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                tournament_name: this.tournamentName,
+                                team_number: this.teamNumber,
+                                player_number: player.number
+                            })
+                        });
+
+                        if (!playerResponse.ok) {
+                            throw new Error(`Failed to activate round for player ${player.number}`);
+                        }
+                    }
+
+                    this.showLoading('start-loading', false);
+                    this.displayScoreInput();
+
+                } catch (error) {
+                    this.showLoading('start-loading', false);
+                    this.showError('start-error', error.message);
+                }
+            }
+
+            displayScoreInput() {
+                // Get hole info for current hole
+                this.getCurrentHoleInfo().then(holeInfo => {
+                    document.getElementById('current-hole-number').textContent = this.currentHole;
+                    document.getElementById('current-hole-name').textContent = holeInfo.hole_name || `Hole ${this.currentHole}`;
+                    document.getElementById('current-hole-par').textContent = holeInfo.hole_par || 3;
+                    document.getElementById('current-course-name').textContent = this.courseName;
+
+                    const container = document.getElementById('score-inputs-container');
+                    container.innerHTML = '';
+
+                    this.confirmedPlayers.forEach(player => {
+                        const inputContainer = document.createElement('div');
+                        inputContainer.className = 'score-input-container';
+                        inputContainer.innerHTML = `
+                            <div class="player-info" style="margin-bottom: 10px;">
+                                <div class="player-name">${player.name}</div>
+                                <div class="player-number">Player #${player.number}</div>
+                            </div>
+                            <input type="number" 
+                                   class="score-input" 
+                                   id="score-${player.number}"
+                                   min="1" 
+                                   max="6" 
+                                   placeholder="?">
+                        `;
+                        container.appendChild(inputContainer);
+
+                        const input = document.getElementById(`score-${player.number}`);
+                        input.addEventListener('input', () => {
+                            this.validateScoreInput(input);
+                            this.updateRecordButton();
+                        });
+                    });
+
+                    this.showScreen('screen-score-input');
+                });
+            }
+
+            async fetchCourseHoles() {
+                try {
+                    const response = await fetch(`/courses/${encodeURIComponent(this.courseName)}/holes`);
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch holes for course ${this.courseName}`);
+                    }
+
+                    this.courseHoles = await response.json();
+                } catch (error) {
+                    console.error('Error fetching course holes:', error);
+                    // If API fails, create default hole data
+                    this.courseHoles = [];
+                    for (let i = 1; i <= 18; i++) {
+                        this.courseHoles.push({
+                            number: i,
+                            name: `Hole ${i}`,
+                            par: 3
+                        });
+                    }
+                    throw new Error('Could not retrieve hole information for the course');
+                }
+            }
+
+            async getCurrentHoleInfo() {
+                // Find the hole info for the current hole number
+                const holeInfo = this.courseHoles.find(hole => hole.number === this.currentHole);
+
+                if (holeInfo) {
+                    return {
+                        hole_name: holeInfo.name || `Hole ${this.currentHole}`,
+                        hole_par: holeInfo.par || 3
+                    };
+                } else {
+                    // Fallback if hole not found
+                    return {
+                        hole_name: `Hole ${this.currentHole}`,
+                        hole_par: 3
+                    };
+                }
+            }
+
+            validateScoreInput(input) {
+                const value = parseInt(input.value);
+                const container = input.parentElement;
+
+                if (value >= 1 && value <= 6) {
+                    input.classList.add('valid');
+                    container.classList.add('valid');
+                } else {
+                    input.classList.remove('valid');
+                    container.classList.remove('valid');
+                }
+            }
+
+            updateRecordButton() {
+                const inputs = document.querySelectorAll('.score-input');
+                const allValid = Array.from(inputs).every(input => {
+                    const value = parseInt(input.value);
+                    return value >= 1 && value <= 6;
+                });
+
+                document.getElementById('record-score-btn').disabled = !allValid;
+            }
+
+            async recordScores() {
+                this.showLoading('score-loading', true);
+
+                try {
+                    // Step 8: Record scores for each player
+                    for (const player of this.confirmedPlayers) {
+                        const scoreInput = document.getElementById(`score-${player.number}`);
+                        const score = parseInt(scoreInput.value);
+
+                        // Store score locally
+                        this.playerScores[player.number].push(score);
+
+                        const response = await fetch('/tournament/record-score', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                player_number: player.number,
+                                course_name: this.courseName,
+                                hole_number: this.currentHole,
+                                score: score
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`Failed to record score for player ${player.number}`);
+                        }
+                    }
+
+                    this.holesPlayed++;
+                    this.showLoading('score-loading', false);
+
+                    // Step 9: Move to next hole
+                    if (this.holesPlayed < 18) {
+                        this.moveToNextHole();
+                        this.displayScoreInput();
+                    } else {
+                        // Step 10: All holes completed, start player confirmation
+                        this.currentPlayerConfirmIndex = 0;
+                        this.displayPlayerScoreConfirm();
+                    }
+
+                } catch (error) {
+                    this.showLoading('score-loading', false);
+                    this.showError('score-error', error.message);
+                }
+            }
+
+            moveToNextHole() {
+                this.currentHole++;
+                if (this.currentHole > 18) {
+                    this.currentHole = 1;
+                }
+
+                // Stop when we complete the loop back to starting hole
+                if (this.currentHole === this.startingHole && this.holesPlayed > 0) {
+                    this.holesPlayed = 18; // Force completion
+                }
+            }
+
+            displayPlayerScoreConfirm() {
+                if (this.currentPlayerConfirmIndex >= this.confirmedPlayers.length) {
+                    this.endTeamRound();
+                    return;
+                }
+
+                const player = this.confirmedPlayers[this.currentPlayerConfirmIndex];
+                const scores = this.playerScores[player.number];
+                const total = scores.reduce((sum, score) => sum + score, 0);
+
+                document.getElementById('confirm-player-name').textContent = player.name;
+                document.getElementById('player-total-score').textContent = total;
+
+                // Create score grid
+                const grid = document.getElementById('player-score-grid');
+                grid.innerHTML = '';
+
+                // Header row
+                for (let i = 1; i <= 18; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'score-cell score-header';
+                    cell.textContent = i;
+                    grid.appendChild(cell);
+                }
+
+                // Score row
+                for (let i = 0; i < 18; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'score-cell';
+                    cell.textContent = scores[i] || '-';
+                    grid.appendChild(cell);
+                }
+
+                this.showScreen('screen-player-score-confirm');
+            }
+
+            async confirmPlayerScore() {
+                this.showLoading('confirm-loading', true);
+
+                try {
+                    const player = this.confirmedPlayers[this.currentPlayerConfirmIndex];
+
+                    // Step 11: End player round
+                    const response = await fetch('/tournament/end-player-round', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            tournament_name: this.tournamentName,
+                            player_number: player.number
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to confirm player score');
+                    }
+
+                    this.showLoading('confirm-loading', false);
+                    this.currentPlayerConfirmIndex++;
+                    this.displayPlayerScoreConfirm();
+
+                } catch (error) {
+                    this.showLoading('confirm-loading', false);
+                    this.showError('confirm-error', error.message);
+                }
+            }
+
+            async endTeamRound() {
+                try {
+                    // Step 12: End team round
+                    const response = await fetch('/tournament/end-team-round', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            tournament_name: this.tournamentName,
+                            team_number: this.teamNumber
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to end team round');
+                    }
+
+                    // Step 13: Show congratulations
+                    this.showScreen('screen-congratulations');
+
+                } catch (error) {
+                    this.showError('confirm-error', error.message);
+                }
+            }
+        }
+
+        // Initialize app when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new TournamentApp();
+        });
+    </script>
+</body>
+</html>

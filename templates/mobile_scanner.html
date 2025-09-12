@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Card Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .container {
+            flex: 1;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .scanner-container {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            position: relative;
+        }
+
+        #video {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .scanner-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            border: 2px solid #fff;
+            border-radius: 12px;
+            box-shadow: 0 0 0 10000px rgba(0, 0, 0, 0.3);
+        }
+
+        .scanner-corners {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+        }
+
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #4CAF50;
+        }
+
+        .corner.top-left {
+            top: 0;
+            left: 0;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .corner.top-right {
+            top: 0;
+            right: 0;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .corner.bottom-left {
+            bottom: 0;
+            left: 0;
+            border-right: none;
+            border-top: none;
+        }
+
+        .corner.bottom-right {
+            bottom: 0;
+            right: 0;
+            border-left: none;
+            border-top: none;
+        }
+
+        .scanner-status {
+            padding: 1rem;
+            text-align: center;
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .status-text {
+            color: #4CAF50;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .team-info {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            padding: 1.5rem;
+            display: none;
+        }
+
+        .team-info.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .team-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .team-name {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .team-number {
+            font-size: 1.1rem;
+            color: #666;
+            background: #f8f9fa;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .section {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+        }
+
+        .player-list, .tournament-list {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .player-item, .tournament-item {
+            background: #f8f9fa;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .player-name, .tournament-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .player-number {
+            background: #667eea;
+            color: white;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .scan-again-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            margin-top: 1rem;
+            width: 100%;
+        }
+
+        .scan-again-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            margin: 1rem 0;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: white;
+            font-size: 1.1rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .player-confirmation, .hole-scanner, .hole-scoring, .final-scorecard {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .confirm-player-item {
+            display: flex;
+            align-items: center;
+            padding: 0.8rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            transition: background 0.2s ease;
+        }
+
+        .confirm-player-item:hover {
+            background: #e9ecef;
+        }
+
+        .confirm-player-checkbox {
+            margin-right: 1rem;
+            transform: scale(1.2);
+            accent-color: #4CAF50;
+        }
+
+        .confirm-player-info {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .start-round-btn {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .start-round-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .start-round-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .score-input-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 0.8rem;
+        }
+
+        .player-initials {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #333;
+            background: #667eea;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+        }
+
+        .score-input {
+            width: 60px;
+            height: 40px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: border-color 0.2s ease;
+        }
+
+        .score-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+
+        .submit-scores-btn {
+            background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .submit-scores-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 53, 0.3);
+        }
+
+        .submit-scores-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .scorecard-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .scorecard-table th,
+        .scorecard-table td {
+            padding: 0.8rem;
+            text-align: center;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .scorecard-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .scorecard-summary {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .scorecard-stat {
+            text-align: center;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .scorecard-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .scorecard-stat-label {
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 0.5rem;
+            }
+
+            .header h1 {
+                font-size: 1.3rem;
+            }
+
+            .team-info {
+                padding: 1rem;
+            }
+
+            .scorecard-summary {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏌️ Team Card Scanner</h1>
+    </div>
+
+    <div class="container">
+        <div class="scanner-container" id="scannerContainer">
+            <video id="video" autoplay muted playsinline></video>
+            <div class="scanner-overlay"></div>
+            <div class="scanner-corners">
+                <div class="corner top-left"></div>
+                <div class="corner top-right"></div>
+                <div class="corner bottom-left"></div>
+                <div class="corner bottom-right"></div>
+            </div>
+            <div class="scanner-status">
+                <div class="status-text">Position QR code within the frame</div>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            Initializing camera...
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="manual-input" id="manualInput" style="display: none;">
+            <div style="background: white; border-radius: 16px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);">
+                <h3 style="text-align: center; margin-bottom: 1rem; color: #333;">Manual QR Code Input</h3>
+                <p style="text-align: center; color: #666; margin-bottom: 1rem; font-size: 0.9rem;">
+                    Paste the QR code data or team information below:
+                </p>
+                <textarea 
+                    id="manualQrInput" 
+                    placeholder="Paste QR code JSON data here..."
+                    style="width: 100%; height: 120px; padding: 1rem; border: 2px solid #e0e0e0; border-radius: 8px; font-family: monospace; font-size: 0.8rem; resize: vertical;"
+                ></textarea>
+                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                    <button onclick="processManualInput()" style="flex: 1; background: #4CAF50; color: white; border: none; padding: 0.8rem; border-radius: 8px; font-weight: 600;">Process Data</button>
+                    <button onclick="retryCamera()" style="flex: 1; background: #667eea; color: white; border: none; padding: 0.8rem; border-radius: 8px; font-weight: 600;">Try Camera Again</button>
+                </div>
+                <button onclick="loadSampleData()" style="width: 100%; background: #FF9800; color: white; border: none; padding: 0.8rem; border-radius: 8px; font-weight: 600; margin-top: 0.5rem;">Load Sample Team Data</button>
+            </div>
+        </div>
+
+        <div class="team-info" id="teamInfo">
+            <div class="team-header">
+                <div class="team-name" id="teamName"></div>
+                <div class="team-number" id="teamNumber"></div>
+            </div>
+
+            <div class="section" id="playersSection">
+                <div class="section-title">👥 Players</div>
+                <div class="player-list" id="playerList"></div>
+            </div>
+
+            <div class="section" id="tournamentsSection">
+                <div class="section-title">🏆 Tournaments</div>
+                <div class="tournament-list" id="tournamentList"></div>
+            </div>
+
+            <button class="scan-again-btn" onclick="scanAgain()">Scan Another Card</button>
+        </div>
+
+        <!-- Player Confirmation Screen -->
+        <div class="player-confirmation" id="playerConfirmation" style="display: none;">
+            <div style="background: white; border-radius: 16px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); width: 100%; max-width: 400px;">
+                <div class="team-header">
+                    <div class="team-name" id="confirmTeamName"></div>
+                    <div class="team-number" id="confirmTeamNumber"></div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">✓ Confirm Playing Members</div>
+                    <p style="color: #666; margin-bottom: 1rem; font-size: 0.9rem;">
+                        Select the players participating in this round:
+                    </p>
+                    <div class="confirm-player-list" id="confirmPlayerList"></div>
+                </div>
+
+                <button class="start-round-btn" id="startRoundBtn" onclick="startRound()" disabled>
+                    Start Round
+                </button>
+                <button class="scan-again-btn" onclick="scanAgain()" style="margin-top: 0.5rem;">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Hole Scanner Screen -->
+        <div class="hole-scanner" id="holeScanner" style="display: none;">
+            <div style="background: white; border-radius: 16px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); width: 100%; max-width: 400px;">
+                <h3 style="text-align: center; margin-bottom: 1rem; color: #333;">Scan Hole QR Code</h3>
+                <p style="text-align: center; color: #666; margin-bottom: 1rem; font-size: 0.9rem;">
+                    Scan the QR code for the hole you're starting on:
+                </p>
+                <button class="scan-again-btn" onclick="scanHoleQR()">Scan Hole QR Code</button>
+                <button class="scan-again-btn" onclick="scanAgain()" style="margin-top: 0.5rem; background: #666;">Back to Teams</button>
+            </div>
+        </div>
+
+        <!-- Hole Info and Scoring Screen -->
+        <div class="hole-scoring" id="holeScoring" style="display: none;">
+            <div style="background: white; border-radius: 16px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); width: 100%; max-width: 400px;">
+                <!-- Hole Information -->
+                <div class="hole-header" style="text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #f0f0f0;">
+                    <div style="font-size: 1.4rem; font-weight: 700; color: #333; margin-bottom: 0.5rem;" id="holeInfo">
+                        Hole #<span id="holeNumber">1</span>
+                    </div>
+                    <div style="font-size: 1.1rem; color: #666;" id="courseName">Course Name</div>
+                    <div style="font-size: 1rem; color: #4CAF50; font-weight: 600; margin-top: 0.5rem;">
+                        Par <span id="holePar">4</span>
+                    </div>
+                </div>
+
+                <!-- Score Input -->
+                <div class="section">
+                    <div class="section-title">⛳ Enter Scores</div>
+                    <div class="score-input-list" id="scoreInputList"></div>
+                </div>
+
+                <!-- Round Progress -->
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin: 1rem 0; text-align: center;">
+                    <div style="font-size: 0.9rem; color: #666;">Hole Progress</div>
+                    <div style="font-size: 1.1rem; font-weight: 600; color: #333;">
+                        <span id="currentHoleProgress">1</span> of 18
+                    </div>
+                </div>
+
+                <button class="submit-scores-btn" id="submitScoresBtn" onclick="submitScores()">
+                    Submit Scores
+                </button>
+            </div>
+        </div>
+
+        <!-- Final Scorecard Screen -->
+        <div class="final-scorecard" id="finalScorecard" style="display: none;">
+            <div style="background: white; border-radius: 16px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); width: 100%; max-width: 400px;">
+                <div style="text-align: center; margin-bottom: 1.5rem;">
+                    <h2 style="color: #333; margin-bottom: 0.5rem;">🏆 Round Complete!</h2>
+                    <div class="team-name" id="finalTeamName"></div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">📊 Final Scorecard</div>
+                    <div id="scorecardContent"></div>
+                </div>
+
+                <button class="scan-again-btn" onclick="startNewRound()" style="margin-top: 1rem;">
+                    Start New Round
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Code Scanner Library -->
+    <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+
+    <script>
+        let qrScanner;
+        let isScanning = false;
+        let currentTeamData = null;
+        let confirmedPlayers = [];
+        let currentHole = null;
+        let startingHole = null;
+        let completedHoles = [];
+        let currentCourse = null;
+        let holeSequence = [];
+        let currentHoleIndex = 0;
+
+        async function initializeScanner() {
+            const video = document.getElementById('video');
+            const loading = document.getElementById('loading');
+            const scannerContainer = document.getElementById('scannerContainer');
+            const errorMessage = document.getElementById('errorMessage');
+            const manualInput = document.getElementById('manualInput');
+
+            try {
+                // First check if we're on HTTPS or localhost
+                const isSecureContext = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+                if (!isSecureContext) {
+                    throw new Error('Camera access requires HTTPS or localhost. Please use HTTPS or access via localhost.');
+                }
+
+                // Check for getUserMedia support
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera access not supported by this browser');
+                }
+
+                // Try to get camera permissions first
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    stream.getTracks().forEach(track => track.stop()); // Stop the test stream
+                } catch (permissionError) {
+                    console.error('Camera permission error:', permissionError);
+                    throw new Error(`Camera permission denied or not available. Error: ${permissionError.message}`);
+                }
+
+                // Check if QR scanner can detect cameras
+                const hasCamera = await QrScanner.hasCamera();
+                if (!hasCamera) {
+                    throw new Error('No camera detected on this device');
+                }
+
+                // Initialize QR scanner
+                qrScanner = new QrScanner(
+                    video,
+                    result => handleScanResult(result),
+                    {
+                        onDecodeError: err => {
+                            // Silently handle decode errors (normal when no QR code is visible)
+                        },
+                        highlightScanRegion: false,
+                        highlightCodeOutline: false,
+                        preferredCamera: 'environment' // Use back camera on mobile
+                    }
+                );
+
+                await qrScanner.start();
+                isScanning = true;
+
+                // Hide loading and show scanner
+                loading.style.display = 'none';
+                scannerContainer.style.display = 'block';
+
+                console.log('Camera scanner initialized successfully');
+
+            } catch (error) {
+                console.error('Scanner initialization failed:', error);
+                loading.style.display = 'none';
+
+                let errorMsg = 'Failed to initialize camera: ' + error.message;
+                let showManualInput = false;
+
+                // Provide specific guidance based on error type
+                if (error.message.includes('HTTPS')) {
+                    errorMsg += '\n\nTip: Camera access requires HTTPS in production. For testing, use localhost or enable manual input below.';
+                    showManualInput = true;
+                } else if (error.message.includes('permission')) {
+                    errorMsg += '\n\nPlease allow camera permissions and refresh the page.';
+                    showManualInput = true;
+                } else if (error.message.includes('No camera')) {
+                    errorMsg += '\n\nNo camera found. Use manual input below to test with sample data.';
+                    showManualInput = true;
+                } else {
+                    errorMsg += '\n\nTry refreshing the page or use manual input below.';
+                    showManualInput = true;
+                }
+
+                showError(errorMsg);
+
+                if (showManualInput) {
+                    setTimeout(() => {
+                        manualInput.style.display = 'block';
+                    }, 2000);
+                }
+            }
+        }
+
+        function processManualInput() {
+            const input = document.getElementById('manualQrInput').value.trim();
+            const manualInput = document.getElementById('manualInput');
+
+            if (!input) {
+                showError('Please enter QR code data');
+                return;
+            }
+
+            try {
+                // Try to parse as JSON first
+                let qrData = input;
+                try {
+                    JSON.parse(input);
+                } catch {
+                    // If not JSON, create a sample team data structure
+                    qrData = JSON.stringify({
+                        "type": "team_card",
+                        "team_name": input.includes('team') ? input : "Sample Team",
+                        "team_number": "123",
+                        "players": [
+                            {"name": "Player 1", "number": "001"},
+                            {"name": "Player 2", "number": "002"}
+                        ],
+                        "tournaments": [
+                            {"tournament_name": "Sample Tournament"}
+                        ],
+                        "generated_at": new Date().toISOString()
+                    });
+                }
+
+                manualInput.style.display = 'none';
+                handleScanResult({ data: qrData });
+            } catch (error) {
+                showError('Invalid data format: ' + error.message);
+            }
+        }
+
+        function retryCamera() {
+            const manualInput = document.getElementById('manualInput');
+            const loading = document.getElementById('loading');
+            const errorMessage = document.getElementById('errorMessage');
+
+            manualInput.style.display = 'none';
+            errorMessage.classList.remove('show');
+            loading.style.display = 'block';
+
+            // Reset scanner
+            if (qrScanner) {
+                qrScanner.destroy();
+                qrScanner = null;
+            }
+
+            setTimeout(initializeScanner, 500);
+        }
+
+        async function handleScanResult(result) {
+            if (!isScanning) return;
+
+            isScanning = false;
+            qrScanner.stop();
+
+            try {
+                // Send scanned data to server for processing
+                const response = await fetch('/process_qr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ qr_data: result.data })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.qr_type === 'team_card') {
+                        displayTeamInfo(data.team_data);
+                    } else if (data.qr_type === 'hole_card') {
+                        handleHoleQR(data.hole_data);
+                    }
+                } else {
+                    showError(data.error || 'Failed to process QR code');
+                    setTimeout(() => {
+                        scanAgain();
+                    }, 3000);
+                }
+
+            } catch (error) {
+                console.error('Error processing QR code:', error);
+                showError('Network error. Please try again.');
+                setTimeout(() => {
+                    scanAgain();
+                }, 3000);
+            }
+        }
+
+        function displayTeamInfo(teamData) {
+            // Show player confirmation screen instead of team info
+            showPlayerConfirmation(teamData);
+        }
+
+        function scanAgain() {
+            const scannerContainer = document.getElementById('scannerContainer');
+            const teamInfo = document.getElementById('teamInfo');
+            const errorMessage = document.getElementById('errorMessage');
+
+            // Hide team info and errors
+            teamInfo.classList.remove('show');
+            errorMessage.classList.remove('show');
+
+            // Show scanner and restart scanning
+            scannerContainer.style.display = 'block';
+
+            if (qrScanner) {
+                qrScanner.start();
+                isScanning = true;
+            } else {
+                initializeScanner();
+            }
+        }
+
+        function loadSampleData() {
+            const sampleData = {
+                "type": "team_card",
+                "team_name": "Thunder Hawks",
+                "team_number": "42",
+                "players": [
+                    {"name": "Alex Johnson", "number": "101"},
+                    {"name": "Sarah Chen", "number": "102"},
+                    {"name": "Mike Rodriguez", "number": "103"},
+                    {"name": "Emma Thompson", "number": "104"}
+                ],
+                "tournaments": [
+                    {"tournament_name": "Spring Championship 2025"},
+                    {"tournament_name": "Regional Masters Cup"},
+                    {"tournament_name": "City Tournament Series"}
+                ],
+                "generated_at": "2025-08-26T10:30:00Z"
+            };
+
+            document.getElementById('manualQrInput').value = JSON.stringify(sampleData, null, 2);
+        }
+
+        function showPlayerConfirmation(teamData) {
+            currentTeamData = teamData;
+            const scannerContainer = document.getElementById('scannerContainer');
+            const teamInfo = document.getElementById('teamInfo');
+            const playerConfirmation = document.getElementById('playerConfirmation');
+
+            // Hide previous screens
+            scannerContainer.style.display = 'none';
+            teamInfo.classList.remove('show');
+
+            // Populate confirmation screen
+            document.getElementById('confirmTeamName').textContent = teamData.team_name || 'Unknown Team';
+            document.getElementById('confirmTeamNumber').textContent = `Team #${teamData.team_number || 'N/A'}`;
+
+            const confirmPlayerList = document.getElementById('confirmPlayerList');
+            confirmPlayerList.innerHTML = '';
+
+            if (teamData.players && teamData.players.length > 0) {
+                teamData.players.forEach((player, index) => {
+                    const playerItem = document.createElement('div');
+                    playerItem.className = 'confirm-player-item';
+                    playerItem.innerHTML = `
+                        <input type="checkbox" class="confirm-player-checkbox" id="player_${index}" 
+                               onchange="updateStartButton()" checked>
+                        <div class="confirm-player-info">
+                            <div class="player-name">${player.name || 'Unknown Player'}</div>
+                            <div class="player-number">#${player.number || 'N/A'}</div>
+                        </div>
+                    `;
+                    confirmPlayerList.appendChild(playerItem);
+                });
+            }
+
+            updateStartButton();
+            playerConfirmation.style.display = 'block';
+        }
+
+        function updateStartButton() {
+            const checkboxes = document.querySelectorAll('.confirm-player-checkbox');
+            const checkedBoxes = document.querySelectorAll('.confirm-player-checkbox:checked');
+            const startBtn = document.getElementById('startRoundBtn');
+
+            startBtn.disabled = checkedBoxes.length === 0;
+            startBtn.textContent = `Start Round (${checkedBoxes.length} players)`;
+        }
+
+        function startRound() {
+            // Get confirmed players
+            confirmedPlayers = [];
+            const checkboxes = document.querySelectorAll('.confirm-player-checkbox');
+
+            checkboxes.forEach((checkbox, index) => {
+                if (checkbox.checked && currentTeamData.players[index]) {
+                    confirmedPlayers.push(currentTeamData.players[index]);
+                }
+            });
+
+            if (confirmedPlayers.length === 0) {
+                showError('Please select at least one player');
+                return;
+            }
+
+            // Show hole scanner
+            const playerConfirmation = document.getElementById('playerConfirmation');
+            const holeScanner = document.getElementById('holeScanner');
+
+            playerConfirmation.style.display = 'none';
+            holeScanner.style.display = 'block';
+        }
+
+        function scanHoleQR() {
+            // Re-initialize scanner for hole QR
+            const holeScanner = document.getElementById('holeScanner');
+            const scannerContainer = document.getElementById('scannerContainer');
+
+            holeScanner.style.display = 'none';
+            scannerContainer.style.display = 'block';
+
+            if (qrScanner) {
+                qrScanner.start();
+                isScanning = true;
+            } else {
+                initializeScanner();
+            }
+        }
+
+        function handleHoleQR(holeData) {
+            currentHole = holeData;
+            currentCourse = holeData.course_name;
+
+            // Set starting hole and create sequence
+            if (startingHole === null) {
+                startingHole = holeData.hole_number;
+                holeSequence = createHoleSequence(startingHole);
+                currentHoleIndex = 0;
+            }
+
+            displayHoleScoring(holeData);
+        }
+
+        function createHoleSequence(startHole) {
+            const sequence = [];
+
+            // Start from starting hole to 18
+            for (let i = startHole; i <= 18; i++) {
+                sequence.push(i);
+            }
+
+            // Then from 1 to starting hole - 1
+            for (let i = 1; i < startHole; i++) {
+                sequence.push(i);
+            }
+
+            return sequence;
+        }
+
+        function displayHoleScoring(holeData) {
+            const scannerContainer = document.getElementById('scannerContainer');
+            const holeScorer = document.getElementById('holeScoring');
+
+            scannerContainer.style.display = 'none';
+
+            // Update hole information
+            document.getElementById('holeNumber').textContent = holeData.hole_number;
+            document.getElementById('courseName').textContent = holeData.course_name || 'Golf Course';
+            document.getElementById('holePar').textContent = holeData.par || 4;
+            document.getElementById('currentHoleProgress').textContent = currentHoleIndex + 1;
+
+            // Create score inputs for confirmed players
+            const scoreInputList = document.getElementById('scoreInputList');
+            scoreInputList.innerHTML = '';
+
+            confirmedPlayers.forEach((player, index) => {
+                const initials = getPlayerInitials(player.name);
+                const scoreItem = document.createElement('div');
+                scoreItem.className = 'score-input-item';
+                scoreItem.innerHTML = `
+                    <div style="display: flex; align-items: center; flex: 1;">
+                        <div class="player-initials">${initials}</div>
+                        <div>
+                            <div style="font-weight: 600; color: #333;">${player.name}</div>
+                            <div style="font-size: 0.8rem; color: #666;">#${player.number}</div>
+                        </div>
+                    </div>
+                    <input type="number" class="score-input" id="score_${index}" 
+                           min="1" max="20" placeholder="${holeData.par || 4}">
+                `;
+                scoreInputList.appendChild(scoreItem);
+            });
+
+            holeScorer.style.display = 'block';
+        }
+
+        function getPlayerInitials(name) {
+            if (!name) return '??';
+            const parts = name.split(' ');
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+            }
+            return name.substring(0, 2).toUpperCase();
+        }
+
+        async function submitScores() {
+            const submitBtn = document.getElementById('submitScoresBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+
+            try {
+                // Collect scores
+                const scores = [];
+                let hasErrors = false;
+
+                for (let i = 0; i < confirmedPlayers.length; i++) {
+                    const scoreInput = document.getElementById(`score_${i}`);
+                    const score = parseInt(scoreInput.value);
+
+                    if (isNaN(score) || score < 1 || score > 20) {
+                        showError(`Please enter a valid score (1-20) for ${confirmedPlayers[i].name}`);
+                        hasErrors = true;
+                        break;
+                    }
+
+                    scores.push({
+                        player_number: confirmedPlayers[i].number,
+                        score: score
+                    });
+                }
+
+                if (hasErrors) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Submit Scores';
+                    return;
+                }
+
+                // Submit to API
+                const response = await fetch('/submit_scores', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        scores: scores,
+                        course_name: currentCourse,
+                        hole_number: currentHole.hole_number
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Mark hole as completed
+                    completedHoles.push(currentHole.hole_number);
+
+                    // Move to next hole
+                    moveToNextHole();
+                } else {
+                    showError(`Error submitting scores: ${data.error || 'Unknown error'}`);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Submit Scores';
+                }
+
+            } catch (error) {
+                console.error('Error submitting scores:', error);
+                showError('Network error. Please try again.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Scores';
+            }
+        }
+
+        async function moveToNextHole() {
+            currentHoleIndex++;
+
+            // Check if round is complete
+            if (currentHoleIndex >= holeSequence.length) {
+                await showFinalScorecard();
+                return;
+            }
+
+            // Get next hole number
+            const nextHoleNumber = holeSequence[currentHoleIndex];
+
+            // Create mock hole data (in real implementation, this might come from API)
+            const nextHoleData = {
+                course_name: currentCourse,
+                hole_number: nextHoleNumber,
+                par: 4, // Default par, could be fetched from API
+                distance: '',
+                description: ''
+            };
+
+            currentHole = nextHoleData;
+            displayHoleScoring(nextHoleData);
+        }
+
+        async function showFinalScorecard() {
+            try {
+                // Get team scorecard from API
+                const response = await fetch('/get_team_scorecard', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        team_name: currentTeamData.team_name
+                    })
+                });
+
+                const data = await response.json();
+
+                const holeScorer = document.getElementById('holeScoring');
+                const finalScorecard = document.getElementById('finalScorecard');
+
+                holeScorer.style.display = 'none';
+
+                if (data.success) {
+                    displayScorecard(data.scorecard);
+                } else {
+                    // Show basic completion message
+                    document.getElementById('finalTeamName').textContent = currentTeamData.team_name;
+                    document.getElementById('scorecardContent').innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: #666;">
+                            Round completed! Check the main tournament app for detailed scores.
+                        </div>
+                    `;
+                }
+
+                finalScorecard.style.display = 'block';
+
+            } catch (error) {
+                console.error('Error getting scorecard:', error);
+                // Still show completion screen
+                const holeScorer = document.getElementById('holeScoring');
+                const finalScorecard = document.getElementById('finalScorecard');
+
+                holeScorer.style.display = 'none';
+                document.getElementById('finalTeamName').textContent = currentTeamData.team_name;
+                document.getElementById('scorecardContent').innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: #666;">
+                        Round completed! Check the main tournament app for detailed scores.
+                    </div>
+                `;
+                finalScorecard.style.display = 'block';
+            }
+        }
+
+        function displayScorecard(scorecard) {
+            document.getElementById('finalTeamName').textContent = currentTeamData.team_name;
+
+            const scorecardContent = document.getElementById('scorecardContent');
+            scorecardContent.innerHTML = `
+                <div class="scorecard-summary">
+                    <div class="scorecard-stat">
+                        <div class="scorecard-stat-value">${scorecard.total || 0}</div>
+                        <div class="scorecard-stat-label">Total Score</div>
+                    </div>
+                    <div class="scorecard-stat">
+                        <div class="scorecard-stat-value">${scorecard.average || '0.0'}</div>
+                        <div class="scorecard-stat-label">Average</div>
+                    </div>
+                    <div class="scorecard-stat">
+                        <div class="scorecard-stat-value">${scorecard.holes_played || 0}</div>
+                        <div class="scorecard-stat-label">Holes Played</div>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 1.1rem; font-weight: 600; color: #333;">Team Rank</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: #4CAF50;">#${scorecard.rank || '?'}</div>
+                </div>
+            `;
+        }
+
+        function startNewRound() {
+            // Reset all variables
+            currentTeamData = null;
+            confirmedPlayers = [];
+            currentHole = null;
+            startingHole = null;
+            completedHoles = [];
+            currentCourse = null;
+            holeSequence = [];
+            currentHoleIndex = 0;
+
+            // Return to main scanner
+            scanAgain();
+        }
+
+        function showError(message) {
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+        }
+
+        // Initialize scanner when page loads
+        document.addEventListener('DOMContentLoaded', initializeScanner);
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && qrScanner) {
+                qrScanner.stop();
+                isScanning = false;
+            } else if (!document.hidden && qrScanner && !isScanning) {
+                qrScanner.start();
+                isScanning = true;
+            }
+        });
+    </script>
+</body>
+</html>
