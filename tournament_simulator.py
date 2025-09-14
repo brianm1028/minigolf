@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Tournament Simulator - Simulates 25 teams playing in a tournament
-Mimics the behavior of the mobile/index.html app for testing purposes
+Mimics the behavior of the mobile/index-old.html app for testing purposes
 """
 
 import threading
@@ -14,6 +14,8 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 import logging
 
+from generate_team_cards import MAIN_API_BASE
+
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 # Configure logging
@@ -24,8 +26,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # API endpoints
-MAIN_API_BASE = "https://10.0.0.204:8000"
-TOURNAMENT_API_BASE = "https://10.0.0.204:8000/tournament"
+MAIN_API_BASE = "https://raidersofthelostpar.org:8000"
+TOURNAMENT_API_BASE = MAIN_API_BASE + "/tournament"
 
 class TeamSimulator:
     def __init__(self, team_number):

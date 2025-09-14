@@ -37,6 +37,7 @@ def get_db_session():
 # Pydantic Models
 class RecordScoreRequest(BaseModel):
     player_number: int
+    tournament_name: str
     course_name: str
     hole_number: int
     score: int
@@ -47,6 +48,9 @@ class TeamLeaderboardEntry(BaseModel):
     average: float
     rank: int
     holes_played: int
+    current_hole: int
+    starting_hole: int
+    completed: bool
 
 class PlayerLeaderboardEntry(BaseModel):
     player_name: str
@@ -54,6 +58,9 @@ class PlayerLeaderboardEntry(BaseModel):
     average: float
     rank: int
     holes_played: int
+    current_hole: int
+    starting_hole: int
+    completed: bool
 
 class LeaderboardResponse(BaseModel):
     message: str
@@ -83,15 +90,26 @@ class StartTournamentRequest(BaseModel):
 class ActivateTeamRoundRequest(BaseModel):
     tournament_name: str
     team_number: int
+    course_name: str
+    hole_number: int
 
 class ActivatePlayerRoundRequest(BaseModel):
     tournament_name: str
     team_number: int
     player_number: int
+    course_name: str
+    hole_number: int
 
 class TournamentManagementResponse(BaseModel):
     message: str
     affected_count: int
+
+class RecordTeamScoresRequest(BaseModel):
+    tournament_name: str
+    course_name: str
+    hole_number: int
+    team_number: int
+    player_scores: list[dict]  # [{"player_number": int, "score": int}]
 
 class GenerateTeamCardRequest(BaseModel):
     team_number: int
@@ -104,6 +122,14 @@ class QRCodeResponse(BaseModel):
     message: str
     qr_code_base64: str
     encoded_data: Dict[str, Any]
+
+class CurrentTeamHoleRequest(BaseModel):
+    tournament_name: str
+    team_number: int
+
+class PlayerScoreCardRequest(BaseModel):
+    tournament_name: str
+    player_number: int
 
 # Application Layer Endpoints
 
@@ -183,63 +209,54 @@ async def record_score(request: RecordScoreRequest):
     """
     Takes a player number, course name, hole number, and score as input.
     Identifies the active PlayerRound for the given player, course, and hole
-    and creates or updates the PLAYED_HOLE relationship.
+    and creates or updates the PLAYED_HOLE relationship. After recording the score,
+    updates the CURRENT_HOLE relationship to point to the next hole.
     """
     try:
         with get_db_session() as session:
-            # Find the hole
-            hole_query = """
-            MATCH (c:Course {name: $course_name})-[:HAS_HOLE]->(h:Hole {number: $hole_number})
-            RETURN elementId(h) as hole_id
-            """
-            hole_result = session.run(hole_query, 
-                                    course_name=request.course_name, 
-                                    hole_number=request.hole_number)
-            hole_record = hole_result.single()
-            if not hole_record:
-                raise HTTPException(status_code=404, detail="Hole not found for the specified course")
-
-            hole_id = hole_record["hole_id"]
-
-            # Find the active PlayerRound for the player
-            player_round_query = """
-            MATCH (p:Player {number: $player_number})-[:PLAYED_ROUND]->(pr:PlayerRound)
-            WHERE pr.active = true
-            MATCH (pr)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t:Tournament)
-            WHERE t.active = true
-            MATCH (t)-[:USES]->(c:Course {name: $course_name})
-            RETURN elementId(pr) as player_round_id
-            """
-            pr_result = session.run(player_round_query, 
-                                  player_number=request.player_number,
-                                  course_name=request.course_name)
-            pr_record = pr_result.single()
-            if not pr_record:
-                raise HTTPException(status_code=404, detail="Active PlayerRound not found for the specified player and course")
-
-            player_round_id = pr_record["player_round_id"]
-
-            # Check if PLAYED_HOLE relationship already exists and update or create
+            # Record the score
             upsert_query = """
-            MATCH (pr:PlayerRound) WHERE elementId(pr) = $player_round_id
-            MATCH (h:Hole) WHERE elementId(h) = $hole_id
-            MERGE (pr)-[ph:PLAYED_HOLE]->(h)
-            SET ph.score = $score
-            RETURN ph.score as recorded_score
+            MATCH (p:Player {number: $player_number})-[:PLAYED_ROUND]->(pr:PlayerRound)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t:Tournament {name:$tournament_name})
+            MATCH (pr)-[:PLAYED_ON]->(c:Course {name: $course_name})-[:HAS_HOLE]->(h:Hole {number: $hole_number})
+            WHERE pr.status = 'active'
+            MERGE (pr)-[prh:PLAYED_HOLE]->(h)
+            SET prh.score = $score
+            WITH pr, c, h, prh
+            MATCH (c)-[:HAS_HOLE]->(nh:Hole)
+            WHERE nh.number = CASE
+                WHEN h.number = 18 THEN 1
+                ELSE h.number + 1
+            END
+            WITH pr, nh, prh
+            MATCH (pr)-[:STARTING_HOLE]->(sh:Hole)
+            OPTIONAL MATCH (pr)-[ch:CURRENT_HOLE]->(h)
+            DELETE ch
+            WITH pr, nh, sh, prh
+            FOREACH (dummy IN CASE WHEN nh.number = sh.number THEN [1] ELSE [] END | SET pr.status = 'complete')
+            FOREACH (dummy IN CASE WHEN nh.number <> sh.number THEN [1] ELSE [] END | CREATE (pr)-[:CURRENT_HOLE]->(nh))
+            WITH pr, nh, sh, prh
+            RETURN 
+            CASE WHEN nh.number = sh.number THEN 'complete' ELSE 'active' END as status,
+            prh.score as recorded_score,
+            CASE WHEN nh.number = sh.number THEN 0 ELSE nh.number END as next_hole
             """
-            upsert_result = session.run(upsert_query,
-                                      player_round_id=player_round_id,
-                                      hole_id=hole_id,
-                                      score=request.score)
 
-            recorded_score = upsert_result.single()["recorded_score"]
+            upsert_result = session.run(upsert_query,
+                                        player_number=request.player_number,
+                                        course_name=request.course_name,
+                                        tournament_name=request.tournament_name,
+                                        hole_number=request.hole_number,
+                                        score=request.score)
+            record = upsert_result.data()[0]
+            print(record)
 
             return {
                 "message": "Score recorded successfully",
                 "player_number": request.player_number,
                 "course_name": request.course_name,
                 "hole_number": request.hole_number,
-                "score": recorded_score
+                "score": record["recorded_score"],
+                "next_hole": record["next_hole"]
             }
 
     except HTTPException:
@@ -265,13 +282,18 @@ async def get_team_leaderboard(tournament_name: str):
             OPTIONAL MATCH (p)-[:PLAYED_ROUND]->(pr:PlayerRound {active: true})
             OPTIONAL MATCH (pr)-[:PLAYED_ROUND]->(tr)
             OPTIONAL MATCH (pr)-[ph:PLAYED_HOLE]->(h:Hole)
-            WITH team, tr, count(DISTINCT h) as holes_played
+            OPTIONAL MATCH (tr)-[:STARTING_HOLE]->(sh:Hole)
+            OPTIONAL MATCH (tr)-[:CURRENT_HOLE]->(ch:Hole)
+            WITH team, tr, count(DISTINCT h) as holes_played, sh, ch
             WHERE tr.total IS NOT NULL AND tr.average IS NOT NULL AND tr.rank IS NOT NULL
             RETURN team.name as team_name, 
                    tr.total as total, 
                    tr.average as average, 
                    tr.rank as rank,
-                   holes_played
+                   holes_played,
+                   CASE WHEN ch IS NOT NULL THEN ch.number ELSE 0 END as current_hole,
+                   CASE WHEN sh IS NOT NULL THEN sh.number ELSE 0 END as starting_hole,                   
+                   CASE WHEN tr.completed IS NOT NULL THEN tr.completed ELSE False END as completed
             ORDER BY tr.rank DESC
             """
 
@@ -284,7 +306,10 @@ async def get_team_leaderboard(tournament_name: str):
                     total=record["total"],
                     average=record["average"],
                     rank=record["rank"],
-                    holes_played=record["holes_played"]
+                    holes_played=record["holes_played"],
+                    current_hole=record["current_hole"],
+                    starting_hole=record["starting_hole"],
+                    completed=record["completed"]
                 ))
 
             return leaderboard
@@ -308,13 +333,18 @@ async def get_player_leaderboard(tournament_name: str):
             MATCH (p)-[:PLAYED_ROUND]->(pr:PlayerRound {active: true})
             MATCH (pr)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t)
             OPTIONAL MATCH (pr)-[ph:PLAYED_HOLE]->(h:Hole)
-            WITH p, pr, count(h) as holes_played
+            OPTIONAL MATCH (pr)-[:CURRENT_HOLE]->(ch:Hole)
+            OPTIONAL MATCH (pr)-[:STARTING_HOLE]->(sh:Hole)
+            WITH p, pr, ch, sh, count(h) as holes_played
             WHERE pr.total IS NOT NULL AND pr.average IS NOT NULL AND pr.rank IS NOT NULL
             RETURN p.name as player_name,
                    pr.total as total,
                    pr.average as average,
                    pr.rank as rank,
-                   holes_played
+                   holes_played,
+                   CASE WHEN ch IS NOT NULL THEN ch.number ELSE 0 END as current_hole,
+                   CASE WHEN sh IS NOT NULL THEN sh.number ELSE 0 END as starting_hole,
+                   CASE WHEN pr.completed IS NOT NULL THEN pr.completed ELSE False END as completed
             ORDER BY pr.rank DESC
             """
 
@@ -327,7 +357,10 @@ async def get_player_leaderboard(tournament_name: str):
                     total=record["total"],
                     average=record["average"],
                     rank=record["rank"],
-                    holes_played=record["holes_played"]
+                    holes_played=record["holes_played"],
+                    current_hole=record["current_hole"],
+                    starting_hole=record["starting_hole"],
+                    completed=record["completed"]
                 ))
 
             return leaderboard
@@ -482,17 +515,28 @@ async def activate_player_round(request: ActivatePlayerRoundRequest):
             MATCH (p:Player {number: $player_number})-[:MEMBER_OF]->(team)
             MATCH (team)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t)
             MATCH (p)-[:PLAYED_ROUND]->(pr:PlayerRound)-[:PLAYED_ROUND]->(tr)
+            MATCH (tr)-[:PLAYED_ON]->(c:Course {name: $course_name})-[:HAS_HOLE]->(h:Hole {number: $hole_number})
             SET pr.active = true,
                 pr.total = 0,
                 pr.average = 0.0,
-                pr.rank = 0
+                pr.rank = 0,
+                pr.status = "active",
+                pr.completed = false
+            WITH DISTINCT pr,h
+            OPTIONAL MATCH (pr)-[prh:STARTING_HOLE|CURRENT_HOLE]->(hx:Hole)
+            DELETE prh
+            WITH DISTINCT pr,h
+            CREATE (pr)-[:STARTING_HOLE]->(h)
+            CREATE (pr)-[:CURRENT_HOLE]->(h)
             RETURN count(pr) as activated_count
             """
 
             result = session.run(activate_query,
-                               tournament_name=request.tournament_name,
-                               team_number=request.team_number,
-                               player_number=request.player_number)
+                            tournament_name=request.tournament_name,
+                            team_number=request.team_number,
+                            player_number=request.player_number,
+                            hole_number=request.hole_number,
+                            course_name=request.course_name)
 
             activated_count = result.single()["activated_count"]
 
@@ -526,16 +570,27 @@ async def activate_team_round(request: ActivateTeamRoundRequest):
             activate_team_query = """
             MATCH (t:Tournament {name: $tournament_name})-[:HAS_TEAM]->(team:Team {number: $team_number})
             MATCH (team)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t)
+            MATCH (tr)-[:PLAYED_ON]->(c:Course {name: $course_name})-[:HAS_HOLE]->(h:Hole {number: $hole_number})
             SET tr.active = true,
                 tr.total = 0,
                 tr.average = 0.0,
-                tr.rank = 0
+                tr.rank = 0,
+                tr.status = "active",
+                tr.completed = false
+            WITH DISTINCT tr,h
+            MATCH (tr)-[trh:STARTING_HOLE|CURRENT_HOLE]->(hx:Hole)
+            DELETE trh
+            WITH DISTINCT tr,h
+            CREATE (tr)-[:STARTING_HOLE]->(h)
+            CREATE (tr)-[:CURRENT_HOLE]->(h)
             RETURN count(tr) as activated_teams
             """
 
             team_result = session.run(activate_team_query,
                                     tournament_name=request.tournament_name,
-                                    team_number=request.team_number)
+                                    team_number=request.team_number,
+                                    hole_number=request.hole_number,
+                                    course_name=request.course_name)
 
             activated_teams = team_result.single()["activated_teams"]
 
@@ -556,48 +611,173 @@ async def activate_team_round(request: ActivateTeamRoundRequest):
         logger.error(f"Error activating team round: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/start-tournament", response_model=TournamentManagementResponse)
-async def start_tournament(request: StartTournamentRequest):
+@app.post("/record-team-scores")
+async def record_team_scores(request: RecordTeamScoresRequest):
     """
-    Given a tournament name, calls activate_team_round for all Teams in the Tournament.
+    Takes a tournament name, course name, hole number, team number, and list of player scores,
+    then records the score for each player and updates CURRENT_HOLE relationships.
     """
     try:
         with get_db_session() as session:
-            # Activate all TeamRounds and their associated PlayerRounds
-            activate_all_query = """
-            MATCH (t:Tournament {name: $tournament_name})-[:HAS_TEAM]->(team:Team)
-            MATCH (team)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t)
-            SET tr.active = true,
-                tr.total = 0,
-                tr.average = 0.0,
-                tr.rank = 0
-            WITH count(tr) as activated_teams
+            results = []
+
+            # Record scores for each player
+            for player_score in request.player_scores:
+                # Create RecordScoreRequest for individual player
+                score_request = RecordScoreRequest(
+                    player_number=player_score["player_number"],
+                    tournament_name=request.tournament_name,
+                    course_name=request.course_name,
+                    hole_number=request.hole_number,
+                    score=player_score["score"]
+                )
+
+                # Record the score
+                await record_score(score_request)
+
+
+                results.append({
+                    "player_number": player_score["player_number"],
+                    "score": player_score["score"]
+                })
+
+            # Update CURRENT_HOLE relationship for the team
+            update_team_hole_query = """
+            MATCH (te:Team {number: $team_number})-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t:Tournament {name:$tournament_name})
+            MATCH (tr)-[:PLAYED_ON]->(c:Course {name: $course_name})-[:HAS_HOLE]->(h:Hole {number: $hole_number})
+            WHERE tr.status = 'active'
+            WITH tr, c, h
+            MATCH (c)-[:HAS_HOLE]->(nh:Hole)
+            WHERE nh.number = CASE
+                WHEN h.number = 18 THEN 1
+                ELSE h.number + 1
+            END
+            WITH tr, c, nh
+            MATCH (tr)-[:STARTING_HOLE]->(sh:Hole)
+            OPTIONAL MATCH (tr)-[ch:CURRENT_HOLE]->(h)
+            DELETE ch
+            WITH tr, nh, sh
+            FOREACH (dummy IN CASE WHEN nh.number = sh.number THEN [1] ELSE [] END | SET tr.status = 'complete')
+            FOREACH (dummy IN CASE WHEN nh.number <> sh.number THEN [1] ELSE [] END | CREATE (tr)-[:CURRENT_HOLE]->(nh))
+            WITH tr, nh, sh
+            RETURN 
+            CASE WHEN nh.number = sh.number THEN 'complete' ELSE 'active' END as team_status,
+            CASE WHEN nh.number = sh.number THEN 0 ELSE nh.number END as next_hole_num
+            """
+
+            update_result = session.run(update_team_hole_query,
+                       team_number=request.team_number,
+                       tournament_name=request.tournament_name,
+                       course_name=request.course_name,
+                       hole_number=request.hole_number)
+
+            record = update_result.data()[0]
+            print(record)
+
+            return {
+                "message": f"Successfully recorded scores for team {request.team_number}",
+                "tournament_name": request.tournament_name,
+                "course_name": request.course_name,
+                "hole_number": request.hole_number,
+                "team_number": request.team_number,
+                "player_results": results,
+                "next_hole": record["next_hole_num"],
+                "team_status": record["team_status"]
+            }
+
+    except Exception as e:
+        logger.error(f"Error recording team scores: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error recording team scores: {str(e)}")
+
+
+@app.post("/get-current-hole")
+async def get_current_hole(request: CurrentTeamHoleRequest):
+    try:
+        with get_db_session() as session:
+            current_hole_query = """
+            MATCH (te:Team {number: $team_number})-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t:Tournament {name:$tournament_name})
+            MATCH (tr)-[:PLAYED_ON]->(c:Course)
+            OPTIONAL MATCH (tr)-[:CURRENT_HOLE]->(ch:Hole)
+            OPTIONAL MATCH (p:Player)-[:PLAYED_ROUND]->(pr:PlayerRound)-[:PLAYED_ROUND]->(tr) WHERE pr.status = 'active'
+            WITH tr, c, ch, collect(p.number) AS player_numbers
+            RETURN
+                CASE WHEN ch IS NOT NULL THEN ch.number ELSE 0 END as hole_number,
+                CASE WHEN ch IS NOT NULL THEN ch.par ELSE 0 END as hole_par,
+                CASE WHEN ch IS NOT NULL THEN ch.name ELSE '' END as hole_name,
+                c.name as course_name,
+                CASE WHEN size(player_numbers) > 0 THEN player_numbers ELSE 0 END as players,
+                tr.status as team_status
+            """
+
+            result = session.run(current_hole_query, team_number=request.team_number, tournament_name=request.tournament_name)
+            record = result.single()
+
+            if not record:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No current hole found for team {request.team_number} in tournament {request.tournament_name}"
+                )
+
+            return {
+                "message": f"Successfully retrieved next hole for team {request.team_number} in tournament {request.tournament_name}",
+                "tournament_name": request.tournament_name,
+                "course_name": record["course_name"],
+                "hole_number": record["hole_number"],
+                "hole_par": record["hole_par"],
+                "hole_name": record["hole_name"],
+                "team_number": request.team_number,
+                "players": record["players"],
+                "team_status": record["team_status"]
+            }
+
+    except Exception as e:
+        logger.error(f"Error retrieving next hole for team: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving next hole for team: {str(e)}")
+
+@app.post("/start-tournament", response_model=TournamentManagementResponse)
+async def start_tournament(request: StartTournamentRequest):
+    """
+    Given a tournament name, sets all TeamRounds and PlayerRounds status to 'ready',
+    deletes existing PLAYED_HOLE relationships, and resets totals, averages, and ranks to 0.
+    """
+    try:
+        with get_db_session() as session:
+            # Delete existing PLAYED_HOLE relationships and reset data
+            cleanup_query = """
             MATCH (t:Tournament {name: $tournament_name})-[:HAS_TEAM]->(team:Team)
             MATCH (team)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t)
             MATCH (p:Player)-[:MEMBER_OF]->(team)
             MATCH (p)-[:PLAYED_ROUND]->(pr:PlayerRound)-[:PLAYED_ROUND]->(tr)
-            SET pr.active = true,
+            OPTIONAL MATCH (pr)-[ph:PLAYED_HOLE|STARTING_HOLE|CURRENT_HOLE]->(:Hole)
+            OPTIONAL MATCH (tr)-[ph:STARTING_HOLE|CURRENT_HOLE]->(:Hole)
+            DELETE ph
+            WITH tr, pr
+            SET tr.status = 'ready',
+                tr.total = 0,
+                tr.average = 0.0,
+                tr.rank = 0,
+                pr.status = 'ready',
                 pr.total = 0,
                 pr.average = 0.0,
                 pr.rank = 0
-            RETURN activated_teams, count(pr) as activated_players
+            RETURN count(DISTINCT tr) as updated_teams, count(DISTINCT pr) as updated_players
             """
 
-            result = session.run(activate_all_query, tournament_name=request.tournament_name)
+            result = session.run(cleanup_query, tournament_name=request.tournament_name)
             record = result.single()
 
-            if not record or (record["activated_teams"] == 0 and record["activated_players"] == 0):
+            if not record or (record["updated_teams"] == 0 and record["updated_players"] == 0):
                 raise HTTPException(
                     status_code=404,
                     detail=f"No teams or players found for tournament {request.tournament_name}"
                 )
 
-            activated_teams = record["activated_teams"]
-            activated_players = record["activated_players"]
-            total_affected = activated_teams + activated_players
+            updated_teams = record["updated_teams"]
+            updated_players = record["updated_players"]
+            total_affected = updated_teams + updated_players
 
             return TournamentManagementResponse(
-                message=f"Tournament {request.tournament_name} started with {activated_teams} teams and {activated_players} player rounds activated",
+                message=f"Tournament {request.tournament_name} started with {updated_teams} teams and {updated_players} player rounds set to ready status",
                 affected_count=total_affected
             )
 
@@ -610,39 +790,38 @@ async def start_tournament(request: StartTournamentRequest):
 @app.post("/end-tournament", response_model=TournamentManagementResponse)
 async def end_tournament(request: EndTournamentRequest):
     """
-    Given a tournament name, marks all PlayerRounds and TeamRounds in the tournament 
-    as inactive and calls update_leaderboard to finalize scores and rankings.
+    Given a tournament name, sets all PlayerRounds and TeamRounds status to 'done' 
+    and calls update_leaderboard to finalize scores and rankings.
     """
     try:
         with get_db_session() as session:
-            # Deactivate all PlayerRounds and TeamRounds in the tournament
-            deactivate_query = """
+            # Set status to 'done' for all PlayerRounds and TeamRounds in the tournament
+            end_tournament_query = """
             MATCH (t:Tournament {name: $tournament_name})-[:HAS_TEAM]->(team:Team)
             MATCH (team)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t)
-            SET tr.active = false
-            WITH count(tr) as deactivated_teams
+            SET tr.status = 'done'
+            WITH count(tr) as finished_teams
             MATCH (t:Tournament {name: $tournament_name})-[:HAS_TEAM]->(team:Team)
             MATCH (team)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t)
             MATCH (p:Player)-[:MEMBER_OF]->(team)
             MATCH (p)-[:PLAYED_ROUND]->(pr:PlayerRound)-[:PLAYED_ROUND]->(tr)
-            SET pr.active = false
-            RETURN deactivated_teams, count(pr) as deactivated_players
+            SET pr.status = 'done'
+            RETURN finished_teams, count(pr) as finished_players
             """
 
-            result = session.run(deactivate_query, tournament_name=request.tournament_name)
+            result = session.run(end_tournament_query, tournament_name=request.tournament_name)
             record = result.single()
 
-            if not record or (record["deactivated_teams"] == 0 and record["deactivated_players"] == 0):
+            if not record or (record["finished_teams"] == 0 and record["finished_players"] == 0):
                 raise HTTPException(
                     status_code=404,
-                    detail=f"No active rounds found for tournament {request.tournament_name}"
+                    detail=f"No rounds found for tournament {request.tournament_name}"
                 )
 
-            deactivated_teams = record["deactivated_teams"]
-            deactivated_players = record["deactivated_players"]
+            finished_teams = record["finished_teams"]
+            finished_players = record["finished_players"]
 
-            # Call update_leaderboard to finalize scores and rankings
-            # We need to temporarily reactivate rounds for the final calculation
+            # Temporarily set active status for final leaderboard calculation
             temp_activate_query = """
             MATCH (t:Tournament {name: $tournament_name})-[:HAS_TEAM]->(team:Team)
             MATCH (team)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t)
@@ -655,13 +834,13 @@ async def end_tournament(request: EndTournamentRequest):
             # Perform final leaderboard calculation
             await update_leaderboard()
 
-            # Set them back to inactive
-            session.run(deactivate_query, tournament_name=request.tournament_name)
+            # Set status back to 'done'
+            session.run(end_tournament_query, tournament_name=request.tournament_name)
 
-            total_affected = deactivated_teams + deactivated_players
+            total_affected = finished_teams + finished_players
 
             return TournamentManagementResponse(
-                message=f"Tournament {request.tournament_name} ended with final leaderboard calculated. Deactivated {deactivated_teams} teams and {deactivated_players} player rounds",
+                message=f"Tournament {request.tournament_name} ended with final leaderboard calculated. Set {finished_teams} teams and {finished_players} player rounds to done status",
                 affected_count=total_affected
             )
 
@@ -670,6 +849,59 @@ async def end_tournament(request: EndTournamentRequest):
     except Exception as e:
         logger.error(f"Error ending tournament: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/get-player-scorecard")
+async def get_player_scorecard(request: PlayerScoreCardRequest):
+    try:
+        with get_db_session() as session:
+            results = []
+
+            # Update CURRENT_HOLE relationship for the team
+            get_scores_query = """
+            MATCH (p:Player {number: $player_number})-[:PLAYED_ROUND]->(pr:PlayerRound)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t:Tournament {name:$tournament_name})
+            MATCH (h:Hole)<-[:HAS_HOLE]-(c:Course)<-[:PLAYED_ON]-(pr)
+            OPTIONAL MATCH (pr)-[prh:PLAYED_HOLE]->(h)
+            RETURN
+                p.name as player_name,
+                h.number as hole_number,
+                h.name as hole_name,
+                h.par as hole_par,
+                CASE WHEN prh IS NOT NULL THEN prh.score ELSE 0 END as score,
+                c.name as course_name
+            ORDER BY h.number ASC
+            """
+
+            result = session.run(get_scores_query,
+                                 player_number=request.player_number,
+                                 tournament_name=request.tournament_name
+                                 )
+
+            records = result.data()
+            print(records)
+
+            scorecard = {"player_name":"","course_name":"","scores":[{"label":"","number":0,"par":0,"value":0}]*19}
+            print(scorecard)
+            scorecard["scores"][0]["label"] = "Total"
+            scorecard["player_name"] = records[0]["player_name"]
+            scorecard["course_name"] = records[0]["course_name"]
+            for score in records:
+                scorecard["scores"][0]["value"]+=score["score"]
+                scorecard["scores"][0]["par"]+=score["hole_par"]
+                scorecard["scores"][score["hole_number"]]={"label":score["hole_name"],"number":score["hole_number"],"par":score["hole_par"],"value":score["score"]}
+
+            print(scorecard)
+            return {
+                "message": f"Successfully retrieved scores for player {request.player_number}",
+                "tournament_name": request.tournament_name,
+                "player_number": request.player_number,
+                "player_name": scorecard["player_name"],
+                "course_name": scorecard["course_name"],
+                "scores": scorecard["scores"]
+            }
+
+    except Exception as e:
+        logger.error(f"Error retrieving player scores: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving player scores: {str(e)}")
 
 @app.post("/generate-team-card", response_model=QRCodeResponse)
 async def generate_team_card(request: GenerateTeamCardRequest):

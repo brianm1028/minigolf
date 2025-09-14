@@ -19,7 +19,7 @@ app = FastAPI(title="Minigolf Tournament API", version="1.0.0")
 try:
     from tournament_app import app as tournament_app
     app.mount("/tournament", tournament_app, name="tournament")
-    app.mount("/mobile", StaticFiles(directory=Path("mobile"), html=True))
+    app.mount("/mobile", StaticFiles(directory=Path("mobile2"), html=True))
     logger.info("Tournament application mounted successfully at /tournament")
 except ImportError as e:
     logger.warning(f"Could not import tournament_app: {e}")
