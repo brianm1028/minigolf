@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Leaderboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #1e4029 0%, #2d5a35 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 15px 15px 0 0;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 20px;
+            background: #f8f9fa;
+            border: none;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab.active {
+            background: white;
+            border-bottom-color: #1e4029;
+            color: #1e4029;
+        }
+
+        .tab:hover {
+            background: #e9ecef;
+        }
+
+        .leaderboard-container {
+            background: white;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .tournament-selector {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .tournament-selector select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 16px;
+            background: white;
+        }
+
+        .leaderboard {
+            display: none;
+        }
+
+        .leaderboard.active {
+            display: block;
+        }
+
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .leaderboard-table th {
+            background: #1e4029;
+            color: white;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s ease;
+            position: relative;
+        }
+
+        .leaderboard-table th:hover {
+            background: #2d5a35;
+        }
+
+        .leaderboard-table th.sortable::after {
+            content: '↕️';
+            float: right;
+            opacity: 0.5;
+        }
+
+        .leaderboard-table th.sort-asc::after {
+            content: '↑';
+            opacity: 1;
+        }
+
+        .leaderboard-table th.sort-desc::after {
+            content: '↓';
+            opacity: 1;
+        }
+
+        .leaderboard-table td {
+            padding: 15px 12px;
+            border-bottom: 1px solid #dee2e6;
+            transition: background 0.2s ease;
+        }
+
+        .leaderboard-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .leaderboard-table tbody tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        .leaderboard-table tbody tr:nth-child(even):hover {
+            background: #f0f0f0;
+        }
+
+        .rank {
+            font-weight: 700;
+            font-size: 18px;
+            color: #1e4029;
+            text-align: center;
+            width: 60px;
+        }
+
+        .rank.first {
+            color: #ffd700;
+        }
+
+        .rank.second {
+            color: #c0c0c0;
+        }
+
+        .rank.third {
+            color: #cd7f32;
+        }
+
+        .player-name {
+            font-weight: 600;
+            cursor: pointer;
+            color: #1e4029;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .player-name:hover {
+            color: #2d5a35;
+            text-decoration: underline;
+        }
+
+        .team-name {
+            font-weight: 600;
+            color: #1e4029;
+        }
+
+        .score {
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .score.under-par {
+            color: #dc3545;
+        }
+
+        .score.par {
+            color: #333;
+        }
+
+        .score.over-par {
+            color: #333;
+        }
+
+        .status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .status.playing {
+            background: #28a745;
+            color: white;
+        }
+
+        .status.completed {
+            background: #6c757d;
+            color: white;
+        }
+
+        .current-hole {
+            font-weight: 600;
+            color: #1e4029;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1e4029;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 8px;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 15px;
+        }
+
+        .modal-header h2 {
+            color: #1e4029;
+            margin: 0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 5px;
+        }
+
+        .scorecard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 1px;
+            background: #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .scorecard-cell {
+            background: white;
+            padding: 12px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .scorecard-header {
+            background: #1e4029;
+            color: white;
+            font-weight: 600;
+        }
+
+        .scorecard-total {
+            background: #f8f9fa;
+            font-weight: 700;
+        }
+
+        .refresh-btn {
+            background: #1e4029;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 20px;
+            transition: background 0.2s ease;
+        }
+
+        .refresh-btn:hover {
+            background: #2d5a35;
+        }
+
+        .last-updated {
+            color: #666;
+            font-size: 14px;
+            margin-left: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 28px;
+            }
+
+            .tab {
+                padding: 15px;
+                font-size: 16px;
+            }
+
+            .leaderboard-table {
+                font-size: 14px;
+            }
+
+            .leaderboard-table th,
+            .leaderboard-table td {
+                padding: 10px 8px;
+            }
+
+            .modal-content {
+                padding: 20px;
+                width: 95%;
+            }
+
+            .scorecard-grid {
+                grid-template-columns: 2fr 1fr 1fr;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏆 Tournament Leaderboard</h1>
+            <p>Live scores and standings</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showLeaderboard('player')">Player Leaderboard</button>
+            <button class="tab" onclick="showLeaderboard('team')">Team Leaderboard</button>
+        </div>
+
+        <div class="leaderboard-container">
+            <div class="tournament-selector">
+                <select id="tournament-select" onchange="loadLeaderboards()">
+                    <option value="">Select Tournament...</option>
+                    <option value="Raiders of the Lost Par">Raiders of the Lost Par</option>
+                </select>
+                <button class="refresh-btn" onclick="refreshLeaderboards()">Refresh</button>
+                <span class="last-updated" id="last-updated"></span>
+            </div>
+
+            <!-- Player Leaderboard -->
+            <div class="leaderboard active" id="player-leaderboard">
+                <div class="loading" id="player-loading">
+                    <div class="spinner"></div>
+                    <p>Loading player leaderboard...</p>
+                </div>
+                <table class="leaderboard-table" id="player-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="rank">Pos</th>
+                            <th class="sortable" data-sort="name">Player</th>
+                            <th class="sortable" data-sort="total">Total</th>
+                            <th class="sortable" data-sort="average">Avg</th>
+                            <th class="sortable" data-sort="holes_played">Holes</th>
+                            <th class="sortable" data-sort="current_hole">Current</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="player-tbody"></tbody>
+                </table>
+                <div class="error-message" id="player-error"></div>
+            </div>
+
+            <!-- Team Leaderboard -->
+            <div class="leaderboard" id="team-leaderboard">
+                <div class="loading" id="team-loading">
+                    <div class="spinner"></div>
+                    <p>Loading team leaderboard...</p>
+                </div>
+                <table class="leaderboard-table" id="team-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="rank">Pos</th>
+                            <th class="sortable" data-sort="name">Team</th>
+                            <th class="sortable" data-sort="total">Total</th>
+                            <th class="sortable" data-sort="average">Avg</th>
+                            <th class="sortable" data-sort="holes_played">Holes</th>
+                            <th class="sortable" data-sort="current_hole">Current</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="team-tbody"></tbody>
+                </table>
+                <div class="error-message" id="team-error"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scorecard Modal -->
+    <div class="modal" id="scorecard-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="scorecard-title">Player Scorecard</h2>
+                <button class="close-btn" onclick="closeScorecard()">&times;</button>
+            </div>
+            <div id="scorecard-content">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading scorecard...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentLeaderboard = 'player';
+        let playerData = [];
+        let teamData = [];
+        let currentSort = { column: 'rank', direction: 'asc' };
+
+        // API Base URL - adjust this to match your tournament_app.py server
+        const API_BASE_URL = 'https://raidersofthelostpar.org:8000/tournament';
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLeaderboards();
+        });
+
+        // Show/hide leaderboards
+        function showLeaderboard(type) {
+            currentLeaderboard = type;
+
+            // Update tab states
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update leaderboard visibility
+            document.querySelectorAll('.leaderboard').forEach(lb => lb.classList.remove('active'));
+            document.getElementById(`${type}-leaderboard`).classList.add('active');
+        }
+
+        // Refresh leaderboards by calling update endpoint first
+        async function refreshLeaderboards() {
+            const tournamentName = document.getElementById('tournament-select').value;
+            if (!tournamentName) return;
+
+            // Show loading states
+            document.getElementById('player-loading').style.display = 'block';
+            document.getElementById('team-loading').style.display = 'block';
+            document.getElementById('player-table').style.display = 'none';
+            document.getElementById('team-table').style.display = 'none';
+
+            try {
+                // Call update-leaderboard endpoint first
+                const updateResponse = await fetch(`${API_BASE_URL}/update-leaderboard`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tournament_name: tournamentName
+                    })
+                });
+
+                if (!updateResponse.ok) {
+                    console.warn('Update leaderboard endpoint failed, proceeding with data fetch');
+                }
+
+                // Now load the updated leaderboards
+                await loadLeaderboards();
+
+            } catch (error) {
+                console.error('Error refreshing leaderboards:', error);
+                // Still try to load leaderboards even if update fails
+                await loadLeaderboards();
+            }
+        }
+
+        // Load leaderboards from API
+        async function loadLeaderboards() {
+            const tournamentName = document.getElementById('tournament-select').value;
+            if (!tournamentName) return;
+
+            // Show loading states
+            document.getElementById('player-loading').style.display = 'block';
+            document.getElementById('team-loading').style.display = 'block';
+            document.getElementById('player-table').style.display = 'none';
+            document.getElementById('team-table').style.display = 'none';
+
+            try {
+                // Load player leaderboard
+                const playerResponse = await fetch(`${API_BASE_URL}/player-leaderboard/${encodeURIComponent(tournamentName)}`);
+                if (playerResponse.ok) {
+                    playerData = await playerResponse.json();
+                    // Sort by rank in ascending order
+                    playerData.sort((a, b) => a.rank - b.rank);
+                    renderPlayerLeaderboard();
+                } else {
+                    showError('player-error', 'Failed to load player leaderboard');
+                }
+
+                // Load team leaderboard
+                const teamResponse = await fetch(`${API_BASE_URL}/team-leaderboard/${encodeURIComponent(tournamentName)}`);
+                if (teamResponse.ok) {
+                    teamData = await teamResponse.json();
+                    // Sort by rank in ascending order
+                    teamData.sort((a, b) => a.rank - b.rank);
+                    renderTeamLeaderboard();
+                } else {
+                    showError('team-error', 'Failed to load team leaderboard');
+                }
+
+                // Update last updated time
+                document.getElementById('last-updated').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+
+            } catch (error) {
+                console.error('Error loading leaderboards:', error);
+                showError('player-error', 'Network error loading leaderboards');
+                showError('team-error', 'Network error loading leaderboards');
+            }
+
+            // Hide loading states
+            document.getElementById('player-loading').style.display = 'none';
+            document.getElementById('team-loading').style.display = 'none';
+        }
+
+        // Render player leaderboard
+        function renderPlayerLeaderboard() {
+            const tbody = document.getElementById('player-tbody');
+            const table = document.getElementById('player-table');
+
+            tbody.innerHTML = '';
+
+            if (playerData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No player data available</td></tr>';
+            } else {
+                playerData.forEach(player => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="rank ${getRankClass(player.rank)}">${player.rank}</td>
+                        <td><a href="#" class="player-name" onclick="showScorecard('${player.player_name}',${player.player_number}, event)">${player.player_name}</a></td>
+                        <td class="score ${getScoreClass(player.total, player.holes_played)}">${player.total}</td>
+                        <td class="score">${player.average.toFixed(2)}</td>
+                        <td class="current-hole">${player.holes_played}/18</td>
+                        <td class="current-hole">${player.current_hole > 0 ? player.current_hole : '-'}</td>
+                        <td><span class="status ${player.completed ? 'completed' : 'playing'}">${player.completed ? 'Completed' : `Playing Hole ${player.current_hole || 'N/A'}`}</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+
+            table.style.display = 'table';
+        }
+
+        // Render team leaderboard
+        function renderTeamLeaderboard() {
+            const tbody = document.getElementById('team-tbody');
+            const table = document.getElementById('team-table');
+
+            tbody.innerHTML = '';
+
+            if (teamData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No team data available</td></tr>';
+            } else {
+                teamData.forEach(team => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="rank ${getRankClass(team.rank)}">${team.rank}</td>
+                        <td class="team-name">${team.team_name}</td>
+                        <td class="score ${getScoreClass(team.total, team.holes_played)}">${team.total}</td>
+                        <td class="score">${team.average.toFixed(2)}</td>
+                        <td class="current-hole">${team.holes_played}/18</td>
+                        <td class="current-hole">${team.current_hole > 0 ? team.current_hole : '-'}</td>
+                        <td><span class="status ${team.completed ? 'completed' : 'playing'}">${team.completed ? 'Completed' : `Playing Hole ${team.current_hole || 'N/A'}`}</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+
+            table.style.display = 'table';
+        }
+
+        // Show player scorecard
+        async function showScorecard(playerName, playerNumber, event) {
+            event.preventDefault();
+
+            const modal = document.getElementById('scorecard-modal');
+            const title = document.getElementById('scorecard-title');
+            const content = document.getElementById('scorecard-content');
+
+            title.textContent = `${playerName} - Scorecard`;
+            content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading scorecard...</p></div>';
+
+            modal.classList.add('show');
+
+            try {
+                // Find player number from player data
+                const player = playerData.find(p => p.player_name === playerName);
+                if (!player) {
+                    throw new Error('Player not found');
+                }
+
+                const tournamentName = document.getElementById('tournament-select').value;
+
+                // Make API call to get scorecard - this endpoint needs to be implemented
+                // For now, we'll show a placeholder
+                const response = await fetch(`${API_BASE_URL}/get-player-scorecard`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        player_number: player.player_number || 1, // This would need to come from the API
+                        tournament_name: tournamentName
+                    })
+                });
+
+                if (response.ok) {
+                    const scorecard = await response.json();
+                    renderScorecard(scorecard);
+                } else {
+                    content.innerHTML = '<div class="error-message">Failed to load scorecard</div>';
+                }
+
+            } catch (error) {
+                console.error('Error loading scorecard:', error);
+                content.innerHTML = '<div class="error-message">Error loading scorecard</div>';
+            }
+        }
+
+        // Render scorecard in modal
+        function renderScorecard(scorecard) {
+            const content = document.getElementById('scorecard-content');
+
+            let html = `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h3>${scorecard.player_name}</h3>
+                    <p style="color: #666;">Course: ${scorecard.course_name}</p>
+                </div>
+                <div class="scorecard-grid">
+                    <div class="scorecard-cell scorecard-header">Hole</div>
+                    <div class="scorecard-cell scorecard-header">Par</div>
+                    <div class="scorecard-cell scorecard-header">Score</div>
+                    <div class="scorecard-cell scorecard-header">+/-</div>
+            `;
+
+            scorecard.scores.forEach(score => {
+                if (score.number > 0) { // Skip total row for individual holes
+                    const diff = score.value - score.par;
+                    const diffStr = diff > 0 ? `+${diff}` : diff === 0 ? 'E' : diff.toString();
+
+                    html += `
+                        <div class="scorecard-cell">${score.label || `Hole ${score.number}`}</div>
+                        <div class="scorecard-cell">${score.par}</div>
+                        <div class="scorecard-cell">${score.value || '-'}</div>
+                        <div class="scorecard-cell">${score.value ? diffStr : '-'}</div>
+                    `;
+                }
+            });
+
+            // Add total row
+            const totalScore = scorecard.scores[0];
+            const totalDiff = totalScore.value - totalScore.par;
+            const totalDiffStr = totalDiff > 0 ? `+${totalDiff}` : totalDiff === 0 ? 'E' : totalDiff.toString();
+
+            html += `
+                <div class="scorecard-cell scorecard-total">Total</div>
+                <div class="scorecard-cell scorecard-total">${totalScore.par}</div>
+                <div class="scorecard-cell scorecard-total">${totalScore.value}</div>
+                <div class="scorecard-cell scorecard-total">${totalDiffStr}</div>
+            </div>`;
+
+            content.innerHTML = html;
+        }
+
+        // Close scorecard modal
+        function closeScorecard() {
+            document.getElementById('scorecard-modal').classList.remove('show');
+        }
+
+        // Helper functions
+        function getRankClass(rank) {
+            if (rank === 1) return 'first';
+            if (rank === 2) return 'second';
+            if (rank === 3) return 'third';
+            return '';
+        }
+
+        function getScoreClass(total, holes) {
+            const par = holes * 3; // Assuming par 3 average
+            if (total < par) return 'under-par';
+            if (total === par) return 'par';
+            return 'over-par';
+        }
+
+        function showError(elementId, message) {
+            const errorElement = document.getElementById(elementId);
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            setTimeout(() => {
+                errorElement.style.display = 'none';
+            }, 5000);
+        }
+
+        // Sort functionality
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('sortable')) {
+                const column = e.target.getAttribute('data-sort');
+                sortTable(column);
+            }
+        });
+
+        function sortTable(column) {
+            const direction = currentSort.column === column && currentSort.direction === 'asc' ? 'desc' : 'asc';
+            currentSort = { column, direction };
+
+            // Update sort indicators
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (th.getAttribute('data-sort') === column) {
+                    th.classList.add(`sort-${direction}`);
+                }
+            });
+
+            // Sort data
+            const dataToSort = currentLeaderboard === 'player' ? playerData : teamData;
+
+            dataToSort.sort((a, b) => {
+                let aVal = column === 'name' ? 
+                    (currentLeaderboard === 'player' ? a.player_name : a.team_name) : 
+                    a[column];
+                let bVal = column === 'name' ? 
+                    (currentLeaderboard === 'player' ? b.player_name : b.team_name) : 
+                    b[column];
+
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+
+                if (direction === 'asc') {
+                    return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+                } else {
+                    return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+                }
+            });
+
+            // Re-render table
+            if (currentLeaderboard === 'player') {
+                renderPlayerLeaderboard();
+            } else {
+                renderTeamLeaderboard();
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('scorecard-modal');
+            if (event.target === modal) {
+                closeScorecard();
+            }
+        }
+    </script>
+</body>
+</html>
+

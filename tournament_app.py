@@ -44,6 +44,7 @@ class RecordScoreRequest(BaseModel):
 
 class TeamLeaderboardEntry(BaseModel):
     team_name: str
+    team_number: int
     total: int
     average: float
     rank: int
@@ -54,6 +55,7 @@ class TeamLeaderboardEntry(BaseModel):
 
 class PlayerLeaderboardEntry(BaseModel):
     player_name: str
+    player_number: int
     total: int
     average: float
     rank: int
@@ -145,7 +147,7 @@ async def update_leaderboard():
             # Update PlayerRound totals and averages
             player_update_query = """
             MATCH (pr:PlayerRound)-[ph:PLAYED_HOLE]->(h:Hole)
-            WHERE pr.active = true
+            WHERE pr.status IN ['active','complete']
             WITH pr, collect(ph.score) as scores
             SET pr.total = reduce(sum = 0, score IN scores | sum + score),
                 pr.average = reduce(sum = 0, score IN scores | sum + score) * 1.0 / size(scores)
@@ -157,7 +159,7 @@ async def update_leaderboard():
             # Update PlayerRound ranks
             player_rank_query = """
             MATCH (pr:PlayerRound)
-            WHERE pr.active = true AND pr.total IS NOT NULL
+            WHERE pr.status IN ['active','complete'] AND pr.total IS NOT NULL
             WITH pr ORDER BY pr.total ASC
             WITH collect(pr) as player_rounds
             UNWIND range(0, size(player_rounds)-1) as i
@@ -169,10 +171,10 @@ async def update_leaderboard():
             # Update TeamRound totals and averages based on PlayerRounds
             team_update_query = """
             MATCH (t:Team)-[:PLAYED_ROUND]->(tr:TeamRound)
-            WHERE tr.active = true
+            WHERE tr.status IN ['active','complete']
             MATCH (p:Player)-[:MEMBER_OF]->(t)
             MATCH (p)-[:PLAYED_ROUND]->(pr:PlayerRound)
-            WHERE pr.active = true AND pr.total IS NOT NULL
+            WHERE pr.status IN ['active','complete'] AND pr.total IS NOT NULL
             MATCH (pr)-[:PLAYED_ROUND]->(tr)
             WITH tr, collect(pr.total) as player_totals
             SET tr.total = reduce(sum = 0, total IN player_totals | sum + total),
@@ -185,8 +187,8 @@ async def update_leaderboard():
             # Update TeamRound ranks
             team_rank_query = """
             MATCH (tr:TeamRound)
-            WHERE tr.active = true AND tr.total IS NOT NULL
-            WITH tr ORDER BY tr.total ASC
+            WHERE tr.status IN ['active','complete'] AND tr.average IS NOT NULL
+            WITH tr ORDER BY tr.average ASC
             WITH collect(tr) as team_rounds
             UNWIND range(0, size(team_rounds)-1) as i
             WITH team_rounds[i] as tr, i+1 as rank
@@ -276,10 +278,9 @@ async def get_team_leaderboard(tournament_name: str):
         with get_db_session() as session:
             query = """
             MATCH (t:Tournament {name: $tournament_name, active: true})-[:HAS_TEAM]->(team:Team)
-            MATCH (team)-[:PLAYED_ROUND]->(tr:TeamRound {active: true})
+            MATCH (team)-[:PLAYED_ROUND]->(tr:TeamRound) WHERE tr.status IN ['active','complete']
             MATCH (tr)-[:IN_TOURNAMENT]->(t)
-            OPTIONAL MATCH (p:Player)-[:MEMBER_OF]->(team)
-            OPTIONAL MATCH (p)-[:PLAYED_ROUND]->(pr:PlayerRound {active: true})
+            OPTIONAL MATCH (team)<-[:MEMBER_OF]-(p:Player)-[:PLAYED_ROUND]->(pr:PlayerRound) WHERE pr.status IN ['active','complete']
             OPTIONAL MATCH (pr)-[:PLAYED_ROUND]->(tr)
             OPTIONAL MATCH (pr)-[ph:PLAYED_HOLE]->(h:Hole)
             OPTIONAL MATCH (tr)-[:STARTING_HOLE]->(sh:Hole)
@@ -287,6 +288,7 @@ async def get_team_leaderboard(tournament_name: str):
             WITH team, tr, count(DISTINCT h) as holes_played, sh, ch
             WHERE tr.total IS NOT NULL AND tr.average IS NOT NULL AND tr.rank IS NOT NULL
             RETURN team.name as team_name, 
+                team.number as team_number,
                    tr.total as total, 
                    tr.average as average, 
                    tr.rank as rank,
@@ -303,6 +305,7 @@ async def get_team_leaderboard(tournament_name: str):
             for record in result:
                 leaderboard.append(TeamLeaderboardEntry(
                     team_name=record["team_name"],
+                    team_number=record["team_number"],
                     total=record["total"],
                     average=record["average"],
                     rank=record["rank"],
@@ -329,15 +332,15 @@ async def get_player_leaderboard(tournament_name: str):
         with get_db_session() as session:
             query = """
             MATCH (t:Tournament {name: $tournament_name, active: true})-[:HAS_TEAM]->(team:Team)
-            MATCH (p:Player)-[:MEMBER_OF]->(team)
-            MATCH (p)-[:PLAYED_ROUND]->(pr:PlayerRound {active: true})
-            MATCH (pr)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t)
+            MATCH (team)<-[:MEMBER_OF]-(p:Player)-[:PLAYED_ROUND]->(pr:PlayerRound) WHERE pr.status IN ['active','complete']
+            MATCH (pr)-[:PLAYED_ROUND]->(tr:TeamRound)-[:IN_TOURNAMENT]->(t) WHERE tr.status IN ['active','complete']
             OPTIONAL MATCH (pr)-[ph:PLAYED_HOLE]->(h:Hole)
             OPTIONAL MATCH (pr)-[:CURRENT_HOLE]->(ch:Hole)
             OPTIONAL MATCH (pr)-[:STARTING_HOLE]->(sh:Hole)
             WITH p, pr, ch, sh, count(h) as holes_played
             WHERE pr.total IS NOT NULL AND pr.average IS NOT NULL AND pr.rank IS NOT NULL
             RETURN p.name as player_name,
+                    p.number as player_number,
                    pr.total as total,
                    pr.average as average,
                    pr.rank as rank,
@@ -354,6 +357,7 @@ async def get_player_leaderboard(tournament_name: str):
             for record in result:
                 leaderboard.append(PlayerLeaderboardEntry(
                     player_name=record["player_name"],
+                    player_number=record["player_number"],
                     total=record["total"],
                     average=record["average"],
                     rank=record["rank"],
@@ -578,7 +582,7 @@ async def activate_team_round(request: ActivateTeamRoundRequest):
                 tr.status = "active",
                 tr.completed = false
             WITH DISTINCT tr,h
-            MATCH (tr)-[trh:STARTING_HOLE|CURRENT_HOLE]->(hx:Hole)
+            OPTIONAL MATCH (tr)-[trh:STARTING_HOLE|CURRENT_HOLE]->(hx:Hole)
             DELETE trh
             WITH DISTINCT tr,h
             CREATE (tr)-[:STARTING_HOLE]->(h)

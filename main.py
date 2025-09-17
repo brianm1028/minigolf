@@ -20,6 +20,7 @@ try:
     from tournament_app import app as tournament_app
     app.mount("/tournament", tournament_app, name="tournament")
     app.mount("/mobile", StaticFiles(directory=Path("mobile2"), html=True))
+    app.mount("/leaderboard", StaticFiles(directory=Path("leaderboard"), html=True))
     logger.info("Tournament application mounted successfully at /tournament")
 except ImportError as e:
     logger.warning(f"Could not import tournament_app: {e}")
@@ -27,7 +28,7 @@ except Exception as e:
     logger.error(f"Error mounting tournament application: {e}")
 
 # Neo4j connection settings
-NEO4J_URI = "bolt://localhost:7687"
+NEO4J_URI = "bolt://raidersofthelostpar.org:7687"
 NEO4J_USER = "neo4j"
 NEO4J_PASSWORD = "minigolf"
 NEO4J_DATABASE = "minigolf"
@@ -248,8 +249,8 @@ def delete_node(session, label: str, node_id: str):
 def create_relationship(session, from_label: str, to_label: str, relationship_type: str, from_id: str, to_id: str):
     """Generic function to create a relationship"""
     query = f"""
-    MATCH (from:{from_label}) WHERE elementId(from) = $from_id
-    MATCH (to:{to_label}) WHERE elementId(to) = $to_id
+    MATCH (from:{from_label}) WHERE from.name = $from_id
+    MATCH (to:{to_label}) WHERE to.name = $to_id
     CREATE (from)-[r:{relationship_type}]->(to)
     RETURN r, from, to
     """
@@ -617,7 +618,7 @@ async def get_players_for_team(team_number: int):
             RETURN p
             ORDER BY p.name
             """
-            result = session.run(query, team_number=str(team_number))
+            result = session.run(query, team_number=team_number)
 
             players = []
             for record in result:
