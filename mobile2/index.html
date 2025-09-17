@@ -196,6 +196,21 @@
             margin-bottom: 5px;
         }
 
+        .player-name-input {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 5px;
+            width: 100%;
+            padding: 5px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+
+        .player-name-input:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+
         .player-number {
             color: #666;
             font-size: 14px;
@@ -424,6 +439,8 @@
             <div class="player-list" id="player-list"></div>
 
             <button class="btn" id="confirm-players-btn" disabled>Confirm Players</button>
+            <button class="btn btn-secondary" id="save-player-names-btn">Save Player Names</button>
+            <div class="success-message" id="players-success">Player names updated successfully</div>
             <div class="error-message" id="players-error"></div>
         </div>
 
@@ -566,7 +583,7 @@
         };
 
         // API base URL - adjust this to match your FastAPI server
-        const API_BASE_URL = 'https://raidersofthelostpar.org:8000/tournament';
+        const API_BASE_URL = 'https://raidersofthelostpar.org:8000';
 
         // Utility functions
         function showScreen(screenId) {
@@ -714,12 +731,14 @@
                 playerItem.innerHTML = `
                     <input type="checkbox" class="player-checkbox" data-player-number="${player.number}" checked>
                     <div class="player-info">
-                        <div class="player-name">${player.name}</div>
+                        <input type="text" class="player-name-input" value="${player.name}" data-original="${player.name}">
                         <div class="player-number">Player #${player.number}</div>
                     </div>
                 `;
                 playerList.appendChild(playerItem);
             });
+
+                document.getElementById('save-player-names-btn').addEventListener('click', savePlayerNames);
 
             updateConfirmButton();
 
@@ -733,6 +752,63 @@
             const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
             const confirmBtn = document.getElementById('confirm-players-btn');
             confirmBtn.disabled = checkedBoxes.length === 0;
+        }
+
+        // Save player name changes via API
+        async function savePlayerNames() {
+            const playerItems = document.querySelectorAll('.player-item');
+            let hasChanges = false;
+            let updatePromises = [];
+
+            showLoading('team-loading');
+
+            for (const playerItem of playerItems) {
+                const playerNumber = playerItem.querySelector('.player-checkbox').dataset.playerNumber;
+                const playerNameElement = playerItem.querySelector('.player-name');
+                const currentName = playerNameElement.textContent;
+
+                // Find original player data to compare with
+                const originalPlayer = appState.teamData.players.find(p => p.number.toString() === playerNumber);
+
+                if (originalPlayer && currentName !== originalPlayer.name) {
+                    hasChanges = true;
+
+                    // Create promise for API call to update player name
+                    const updatePromise = apiCall('/players/'+toString(playerNumber), 'PUT', {
+                        player_number: playerNumber,
+                        player_name: currentName
+                    })
+                    .then(response => {
+                        // Update the player name in the app state
+                        const playerIndex = appState.teamData.players.findIndex(p => p.number.toString() === playerNumber);
+                        if (playerIndex !== -1) {
+                            appState.teamData.players[playerIndex].name = currentName;
+                        }
+                        return response;
+                    })
+                    .catch(error => {
+                        console.error(`Failed to update player ${playerNumber}:`, error);
+                        throw new Error(`Failed to update player ${playerNumber}`); 
+                    });
+
+                    updatePromises.push(updatePromise);
+                }
+            }
+
+            if (!hasChanges) {
+                hideLoading('team-loading');
+                showSuccess('players-success', 'No changes to player names');
+                return;
+            }
+
+            try {
+                await Promise.all(updatePromises);
+                hideLoading('team-loading');
+                showSuccess('players-success', 'Player names updated successfully');
+            } catch (error) {
+                hideLoading('team-loading');
+                showError('players-error', error.message);
+            }
         }
 
         // Hole Card Scanner
@@ -813,7 +889,7 @@
 
             try {
                 // Step 1: Activate team round
-                await apiCall('/activate-team-round', 'POST', {
+                await apiCall('/tournament/activate-team-round', 'POST', {
                     tournament_name: appState.tournamentName,
                     team_number: appState.teamData.team_number,
                     course_name: appState.holeData.course_name,
@@ -822,7 +898,7 @@
 
                 // Step 2: Activate player rounds for confirmed players
                 for (const player of appState.confirmedPlayers) {
-                    await apiCall('/activate-player-round', 'POST', {
+                    await apiCall('/tournament/activate-player-round', 'POST', {
                         tournament_name: appState.tournamentName,
                         team_number: appState.teamData.team_number,
                         player_number: player.number,
@@ -842,7 +918,7 @@
 
         async function checkExistingRound() {
             try {
-                const response = await apiCall('/get-current-hole', 'POST', {
+                const response = await apiCall('/tournament/get-current-hole', 'POST', {
                     tournament_name: appState.tournamentName,
                     team_number: appState.teamData.team_number
                 });
@@ -904,7 +980,7 @@
 
         async function loadCurrentHole() {
             try {
-                const response = await apiCall('/get-current-hole', 'POST', {
+                const response = await apiCall('/tournament/get-current-hole', 'POST', {
                     tournament_name: appState.tournamentName,
                     team_number: appState.teamData.team_number
                 });
@@ -989,7 +1065,7 @@
                     score: appState.scores[player.number]
                 }));
 
-                await apiCall('/record-team-scores', 'POST', {
+                await apiCall('/tournament/record-team-scores', 'POST', {
                     tournament_name: appState.tournamentName,
                     course_name: appState.currentHole.course_name,
                     hole_number: appState.currentHole.hole_number,
@@ -1022,7 +1098,7 @@
             showLoading('scorecard-loading');
 
             try {
-                const response = await apiCall('/get-player-scorecard', 'POST', {
+                const response = await apiCall('/tournament/get-player-scorecard', 'POST', {
                     tournament_name: appState.tournamentName,
                     player_number: player.number
                 });
@@ -1083,7 +1159,7 @@
             showLoading('scorecard-loading');
 
             try {
-                await apiCall('/end-player-round', 'POST', {
+                await apiCall('/tournament/end-player-round', 'POST', {
                     tournament_name: appState.tournamentName,
                     player_number: player.number
                 });
@@ -1108,7 +1184,7 @@
 
         async function endTeamRound() {
             try {
-                await apiCall('/end-team-round', 'POST', {
+                await apiCall('/tournament/end-team-round', 'POST', {
                     tournament_name: appState.tournamentName,
                     team_number: appState.teamData.team_number
                 });
