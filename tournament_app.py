@@ -652,22 +652,24 @@ async def record_team_scores(request: RecordTeamScoresRequest):
             MATCH (tr)-[:PLAYED_ON]->(c:Course {name: $course_name})-[:HAS_HOLE]->(h:Hole {number: $hole_number})
             WHERE tr.status = 'active'
             WITH tr, c, h
-            MATCH (c)-[:HAS_HOLE]->(nh:Hole)
+            MATCH (tr)-[:STARTING_HOLE]->(sh:Hole)
+            OPTIONAL MATCH (c)-[:HAS_HOLE]->(nh:Hole)
             WHERE nh.number = CASE
-                WHEN h.number = 18 THEN 1
+                WHEN h.number = sh.number THEN 18
+                WHEN h.number = 17 THEN 1
                 ELSE h.number + 1
             END
-            WITH tr, c, nh
-            MATCH (tr)-[:STARTING_HOLE]->(sh:Hole)
+            WITH tr, c, nh, sh, h
             OPTIONAL MATCH (tr)-[ch:CURRENT_HOLE]->(h)
             DELETE ch
             WITH tr, nh, sh
-            FOREACH (dummy IN CASE WHEN nh.number = sh.number THEN [1] ELSE [] END | SET tr.status = 'complete')
-            FOREACH (dummy IN CASE WHEN nh.number <> sh.number THEN [1] ELSE [] END | CREATE (tr)-[:CURRENT_HOLE]->(nh))
+            FOREACH (dummy IN CASE WHEN nh is null THEN [1] ELSE [] END | SET tr.status = 'complete')
+            FOREACH (dummy IN CASE WHEN nh is not null THEN [1] ELSE [] END | CREATE (tr)-[:CURRENT_HOLE]->(nh))
             WITH tr, nh, sh
             RETURN 
-            CASE WHEN nh.number = sh.number THEN 'complete' ELSE 'active' END as team_status,
-            CASE WHEN nh.number = sh.number THEN 0 ELSE nh.number END as next_hole_num
+            CASE WHEN nh is null THEN 'complete' ELSE 'active' END as team_status,
+            CASE WHEN nh is null THEN 0 ELSE nh.number END as next_hole_num
+
             """
 
             update_result = session.run(update_team_hole_query,
