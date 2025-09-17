@@ -224,23 +224,24 @@ async def record_score(request: RecordScoreRequest):
             MERGE (pr)-[prh:PLAYED_HOLE]->(h)
             SET prh.score = $score
             WITH pr, c, h, prh
+            MATCH (pr)-[:STARTING_HOLE]->(sh:Hole)
             MATCH (c)-[:HAS_HOLE]->(nh:Hole)
             WHERE nh.number = CASE
-                WHEN h.number = 18 THEN 1
+                WHEN h.number = sh.number THEN 18
+                WHEN h.number = 17 THEN 1
                 ELSE h.number + 1
             END
-            WITH pr, nh, prh
-            MATCH (pr)-[:STARTING_HOLE]->(sh:Hole)
+            WITH pr, nh, prh, sh
             OPTIONAL MATCH (pr)-[ch:CURRENT_HOLE]->(h)
             DELETE ch
             WITH pr, nh, sh, prh
-            FOREACH (dummy IN CASE WHEN nh.number = sh.number THEN [1] ELSE [] END | SET pr.status = 'complete')
-            FOREACH (dummy IN CASE WHEN nh.number <> sh.number THEN [1] ELSE [] END | CREATE (pr)-[:CURRENT_HOLE]->(nh))
+            FOREACH (dummy IN CASE WHEN nh is null THEN [1] ELSE [] END | SET pr.status = 'complete')
+            FOREACH (dummy IN CASE WHEN nh is not null THEN [1] ELSE [] END | CREATE (pr)-[:CURRENT_HOLE]->(nh))
             WITH pr, nh, sh, prh
             RETURN 
-            CASE WHEN nh.number = sh.number THEN 'complete' ELSE 'active' END as status,
+            CASE WHEN nh is null THEN 'complete' ELSE 'active' END as status,
             prh.score as recorded_score,
-            CASE WHEN nh.number = sh.number THEN 0 ELSE nh.number END as next_hole
+            CASE WHEN nh is null THEN 0 ELSE nh.number END as next_hole
             """
 
             upsert_result = session.run(upsert_query,
