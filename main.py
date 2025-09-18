@@ -212,7 +212,7 @@ def create_node(session, label: str, properties: dict):
 
 def get_node(session, label: str, node_id: str):
     """Generic function to get a node by ID"""
-    query = f"MATCH (n:{label}) WHERE elementId(n) = $id RETURN n"
+    query = f"MATCH (n:{label}) WHERE n.number = $id RETURN n"
     result = session.run(query, id=node_id)
     record = result.single()
     if record:
@@ -233,7 +233,7 @@ def update_node(session, label: str, node_id: str, properties: dict):
         return get_node(session, label, node_id)
 
     set_clauses = [f"n.{key} = ${key}" for key in properties.keys()]
-    query = f"MATCH (n:{label}) WHERE elementId(n) = $id SET {', '.join(set_clauses)} RETURN n"
+    query = f"MATCH (n:{label}) WHERE n.number = $id SET {', '.join(set_clauses)} RETURN n"
     result = session.run(query, id=node_id, **properties)
     record = result.single()
     if record:
@@ -739,7 +739,7 @@ async def get_player(player_id: str):
 async def update_player(player_id: str, player: PlayerUpdate):
     try:
         with get_db_session() as session:
-            result = update_node(session, "Player", player_id, player.dict())
+            result = update_node(session, "Player", player_id, {'name':player.name})
             if result:
                 return PlayerResponse(**result)
             raise HTTPException(status_code=404, detail="Player not found")
