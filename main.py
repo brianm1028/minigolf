@@ -7,10 +7,27 @@ from typing import List, Optional, Dict, Any
 import logging
 from contextlib import contextmanager
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+log_file = "/home/minigolf/log/app.log"
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# File handler for logging to a file with rotation
+file_handler = RotatingFileHandler(log_file, maxBytes=1024*1024*5, backupCount=5) # 5MB per file, 5 backup files
+file_handler.setFormatter(log_formatter)
+
+# Stream handler for console output (optional)
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(log_formatter)
+
+# Get the root logger and add handlers
+logger.setLevel(logging.INFO) # Set desired logging level
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler) 
 
 # FastAPI app
 app = FastAPI(title="Minigolf Tournament API", version="1.0.0")
