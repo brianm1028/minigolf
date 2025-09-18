@@ -775,8 +775,8 @@
 
                     // Create promise for API call to update player name
                     const updatePromise = apiCall('/players/'+playerNumber, 'PUT', {
-                        player_number: playerNumber,
-                        player_name: currentName
+                        number: playerNumber,
+                        name: currentName
                     })
                     .then(response => {
                         // Update the player name in the app state
