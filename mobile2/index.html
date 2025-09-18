@@ -1009,13 +1009,17 @@
             const scoreGrid = document.getElementById('score-grid');
             scoreGrid.innerHTML = '';
 
+	    const scores = (hole.hole_number === 18)
+			? Array.from({length: 8}, (_, i) => i)
+		: [1,2,3,4,5,6];
+
             appState.confirmedPlayers.forEach(player => {
                 const playerDiv = document.createElement('div');
                 playerDiv.className = 'score-player';
                 playerDiv.innerHTML = `
                     <div class="score-player-name">${player.name}</div>
                     <div class="score-buttons" data-player="${player.number}">
-                        ${[1,2,3,4,5,6].map(score => 
+                        ${scores.map(score => 
                             `<button class="score-btn" data-score="${score}">${score}</button>`
                         ).join('')}
                     </div>

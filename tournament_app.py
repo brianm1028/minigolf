@@ -225,14 +225,15 @@ async def record_score(request: RecordScoreRequest):
             SET prh.score = $score
             WITH pr, c, h, prh
             MATCH (pr)-[:STARTING_HOLE]->(sh:Hole)
-            MATCH (c)-[:HAS_HOLE]->(nh:Hole)
+            OPTIONAL MATCH (c)-[:HAS_HOLE]->(nh:Hole)
             WHERE nh.number = CASE
-                WHEN h.number = sh.number THEN 18
-                WHEN h.number = 17 THEN 1
+                WHEN h.number<>17 AND h.number = sh.number-1 THEN 18
+                WHEN h.number = 17 AND sh.number>1 THEN 1
+                WHEN h.number = 17 AND sh.number=1 THEN 18
                 ELSE h.number + 1
             END
             WITH pr, nh, prh, sh
-            OPTIONAL MATCH (pr)-[ch:CURRENT_HOLE]->(h)
+            MATCH (pr)-[ch:CURRENT_HOLE]->(h)
             DELETE ch
             WITH pr, nh, sh, prh
             FOREACH (dummy IN CASE WHEN nh is null THEN [1] ELSE [] END | SET pr.status = 'complete')
@@ -250,7 +251,7 @@ async def record_score(request: RecordScoreRequest):
                                         tournament_name=request.tournament_name,
                                         hole_number=request.hole_number,
                                         score=request.score)
-            record = upsert_result.data()[0]
+            record = upsert_result.data()
             print(record)
 
             return {
@@ -258,8 +259,8 @@ async def record_score(request: RecordScoreRequest):
                 "player_number": request.player_number,
                 "course_name": request.course_name,
                 "hole_number": request.hole_number,
-                "score": record["recorded_score"],
-                "next_hole": record["next_hole"]
+                "score": record[0]["recorded_score"],
+                "next_hole": record[0]["next_hole"]
             }
 
     except HTTPException:
@@ -655,8 +656,9 @@ async def record_team_scores(request: RecordTeamScoresRequest):
             MATCH (tr)-[:STARTING_HOLE]->(sh:Hole)
             OPTIONAL MATCH (c)-[:HAS_HOLE]->(nh:Hole)
             WHERE nh.number = CASE
-                WHEN h.number = sh.number THEN 18
-                WHEN h.number = 17 THEN 1
+                WHEN h.number<>17 AND h.number = sh.number-1 THEN 18
+                WHEN h.number = 17 AND sh.number>1 THEN 1
+                WHEN h.number = 17 AND sh.number=1 THEN 18
                 ELSE h.number + 1
             END
             WITH tr, c, nh, sh, h
@@ -678,8 +680,8 @@ async def record_team_scores(request: RecordTeamScoresRequest):
                        course_name=request.course_name,
                        hole_number=request.hole_number)
 
-            record = update_result.data()[0]
-            print(record)
+            record = update_result.data()
+            print(f"{request.team_number}-{request.hole_number}: {record}")
 
             return {
                 "message": f"Successfully recorded scores for team {request.team_number}",
@@ -688,8 +690,8 @@ async def record_team_scores(request: RecordTeamScoresRequest):
                 "hole_number": request.hole_number,
                 "team_number": request.team_number,
                 "player_results": results,
-                "next_hole": record["next_hole_num"],
-                "team_status": record["team_status"]
+                "next_hole": record[0]["next_hole_num"],
+                "team_status": record[0]["team_status"]
             }
 
     except Exception as e:

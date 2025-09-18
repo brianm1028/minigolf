@@ -213,6 +213,8 @@ def create_node(session, label: str, properties: dict):
 def get_node(session, label: str, node_id: str):
     """Generic function to get a node by ID"""
     query = f"MATCH (n:{label}) WHERE n.number = $id RETURN n"
+    print(query)
+    print(node_id)
     result = session.run(query, id=node_id)
     record = result.single()
     print(record)
@@ -234,9 +236,11 @@ def update_node(session, label: str, node_id: str, properties: dict):
         return get_node(session, label, node_id)
 
     set_clauses = [f"n.{key} = ${key}" for key in properties.keys()]
+    print(properties)
     query = f"MATCH (n:{label}) WHERE n.number = $id SET {', '.join(set_clauses)} RETURN n"
     print(query)
-    result = session.run(query, id=node_id, **properties)
+    print(node_id)
+    result = session.run(query, id=int(node_id), **properties)
     record = result.single()
     print(record)
     if record:
