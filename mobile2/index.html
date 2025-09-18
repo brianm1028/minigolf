@@ -774,7 +774,7 @@
                     hasChanges = true;
 
                     // Create promise for API call to update player name
-                    const updatePromise = apiCall('/players/'+toString(playerNumber), 'PUT', {
+                    const updatePromise = apiCall('/players/'+playerNumber, 'PUT', {
                         player_number: playerNumber,
                         player_name: currentName
                     })
