@@ -765,7 +765,7 @@
             for (const playerItem of playerItems) {
                 const playerNumber = playerItem.querySelector('.player-checkbox').dataset.playerNumber;
                 const playerNameElement = playerItem.querySelector('.player-name-input');
-                const currentName = playerNameElement.textContent;
+                const currentName = playerNameElement.value;
 
                 // Find original player data to compare with
                 const originalPlayer = appState.teamData.players.find(p => p.number.toString() === playerNumber);
